@@ -11,6 +11,15 @@ def extract_text(pdf_bytes: bytes) -> str:
     return "\n\n".join(pages).strip()
 
 
+def extract_pages(pdf_bytes: bytes) -> list[str]:
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        return [page.extract_text() or "" for page in pdf.pages]
+
+
+def format_paginated_text(pages: list[str]) -> str:
+    return "\n\n".join(f"[PAGE {i + 1}]\n{text}" for i, text in enumerate(pages))
+
+
 def validate_text(text: str) -> None:
     if len(text) < MIN_CHARS:
         raise ValueError(

@@ -15,8 +15,8 @@ Parameters:
 Globals:
   Function:
     Runtime: python3.12
-    Timeout: 120
-    MemorySize: 512
+    Timeout: 180
+    MemorySize: 1024
     Environment:
       Variables:
         S3_BUCKET_NAME: !Ref LeasePdfBucket

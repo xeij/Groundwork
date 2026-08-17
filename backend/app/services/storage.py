@@ -15,8 +15,11 @@ def _bucket() -> str:
     return os.getenv("S3_BUCKET_NAME", "")
 
 
-def generate_upload_url() -> tuple[str, str]:
-    s3_key = f"leases/{uuid.uuid4()}.pdf"
+_PREFIX = {"lease": "leases", "filing": "filings"}
+
+
+def generate_upload_url(document_type: str = "lease") -> tuple[str, str]:
+    s3_key = f"{_PREFIX[document_type]}/{uuid.uuid4()}.pdf"
     url = _s3().generate_presigned_url(
         "put_object",
         Params={"Bucket": _bucket(), "Key": s3_key, "ContentType": "application/pdf"},

@@ -17,13 +17,14 @@ def generate_summary_id() -> str:
     return uuid.uuid4().hex[:8]
 
 
-def save_pending(summary_id: str, s3_key: str) -> None:
+def save_pending(summary_id: str, s3_key: str, document_type: str = "lease") -> None:
     created_at = int(time.time())
     _table().put_item(
         Item={
             "summaryId": summary_id,
             "status": "pending",
             "s3Key": s3_key,
+            "documentType": document_type,
             "createdAt": created_at,
             "ttl": created_at + PENDING_TTL_HOURS * 3600,
         }
@@ -52,7 +53,7 @@ def mark_failed(summary_id: str, error: str) -> None:
     )
 
 
-def save_summary(summary: dict) -> str:
+def save_summary(summary: dict, document_type: str = "lease") -> str:
     summary_id = generate_summary_id()
     created_at = int(time.time())
     _table().put_item(
@@ -60,6 +61,7 @@ def save_summary(summary: dict) -> str:
             "summaryId": summary_id,
             "status": "done",
             "summary": summary,
+            "documentType": document_type,
             "createdAt": created_at,
             "ttl": created_at + TTL_DAYS * 86400,
         }

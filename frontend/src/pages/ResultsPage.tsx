@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getSummary } from "../api/client";
 import { CategoryCard } from "../components/CategoryCard";
 import { SummaryIntro } from "../components/SummaryIntro";
+import { FinancialCategoryCard } from "../components/FinancialCategoryCard";
+import { FilingSummaryIntro } from "../components/FilingSummaryIntro";
 import { ShareButton } from "../components/ShareButton";
 import { ErrorBanner } from "../components/ErrorBanner";
 
@@ -52,6 +54,43 @@ export function ResultsPage() {
   }
 
   if (!data) return null;
+
+  if (data.documentType === "filing") {
+    return (
+      <div
+        style={{
+          maxWidth: 660,
+          margin: "0 auto",
+          padding: "2.5rem 1.25rem 3rem",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}
+      >
+        <div style={{ marginBottom: "1.75rem" }}>
+          <Link
+            to="/"
+            style={{ color: "#8b949e", textDecoration: "none", fontSize: "0.875rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}
+          >
+            &#8592; Analyze another document
+          </Link>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0.75rem 0 0", color: "#e6edf3" }}>
+            Filing Summary
+          </h1>
+        </div>
+
+        <FilingSummaryIntro summary={data.summary} />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "2rem" }}>
+          {data.summary.categories.map((cat) => (
+            <FinancialCategoryCard key={cat.name} category={cat} />
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", paddingTop: "0.5rem", borderTop: "1px solid #21262d" }}>
+          <ShareButton />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

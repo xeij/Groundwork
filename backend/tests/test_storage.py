@@ -13,6 +13,14 @@ def test_generate_upload_url_returns_presigned_url_and_key(s3_bucket):
 
 
 @mock_aws
+def test_generate_upload_url_for_filing_uses_filings_prefix(s3_bucket):
+    url, key = generate_upload_url("filing")
+    assert url.startswith("https://")
+    assert key.startswith("filings/")
+    assert key.endswith(".pdf")
+
+
+@mock_aws
 def test_fetch_pdf_returns_bytes(s3_bucket):
     s3_bucket.put_object(Bucket="test-lease-bucket", Key="leases/test.pdf", Body=b"PDF content")
     result = fetch_pdf("leases/test.pdf")

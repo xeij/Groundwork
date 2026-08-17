@@ -28,6 +28,7 @@ aws-exports.js
 # Node
 node_modules/
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local

@@ -35,19 +35,30 @@ def handler(event, context):
 
 
 def _process_async(summary_id: str, s3_key: str) -> None:
+    from .models import document_type_from_s3_key
     from .services import storage, pdf_parser, claude_client
     from .services.summary_store import update_summary, mark_failed
+
+    document_type = document_type_from_s3_key(s3_key)
 
     try:
         pdf_bytes = storage.fetch_pdf(s3_key)
         try:
-            text = pdf_parser.extract_text(pdf_bytes)
-            pdf_parser.validate_text(text)
+            if document_type == "filing":
+                pages = pdf_parser.extract_pages(pdf_bytes)
+                pdf_parser.validate_text("\n\n".join(pages))
+                text = pdf_parser.format_paginated_text(pages)
+            else:
+                text = pdf_parser.extract_text(pdf_bytes)
+                pdf_parser.validate_text(text)
         except Exception as e:
             storage.delete_pdf(s3_key)
             mark_failed(summary_id, str(e))
             return
-        result = claude_client.analyze_lease(text)
+        if document_type == "filing":
+            result = claude_client.analyze_financial_filing(text)
+        else:
+            result = claude_client.analyze_lease(text)
         storage.delete_pdf(s3_key)
         update_summary(summary_id, result)
     except Exception:

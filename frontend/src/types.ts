@@ -34,11 +34,64 @@ export interface Summary {
   categories: Category[];
 }
 
-export interface SummaryRecord {
+export type DocumentType = "lease" | "filing";
+export type Confidence = "high" | "medium" | "low";
+
+export interface Citation {
+  quote: string;
+  page: number | null;
+}
+
+export interface FinancialFinding {
+  summary: string;
+  citation: Citation | null;
+  confidence: Confidence;
+}
+
+export type FinancialCategoryName =
+  | "Risk Factors"
+  | "MD&A / Financial Performance"
+  | "Liquidity & Capital Resources"
+  | "Related-Party Transactions"
+  | "Legal Proceedings & Contingencies"
+  | "Accounting Policy Changes";
+
+export interface FinancialCategory {
+  name: FinancialCategoryName;
+  severity: Severity;
+  findings: FinancialFinding[];
+}
+
+export interface KeyMetrics {
+  totalRevenue: string | null;
+  netIncome: string | null;
+  totalDebt: string | null;
+  cashAndEquivalents: string | null;
+  operatingCashFlow: string | null;
+}
+
+export interface FinancialSummary {
+  intro: string;
+  verdict: Verdict;
+  keyMetrics: KeyMetrics | null;
+  categories: FinancialCategory[];
+}
+
+export interface LeaseSummaryRecord {
   summaryId: string;
+  documentType: "lease";
   summary: Summary;
   createdAt: number;
 }
+
+export interface FilingSummaryRecord {
+  summaryId: string;
+  documentType: "filing";
+  summary: FinancialSummary;
+  createdAt: number;
+}
+
+export type SummaryRecord = LeaseSummaryRecord | FilingSummaryRecord;
 
 export interface UploadUrlResponse {
   presignedUrl: string;

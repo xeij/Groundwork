@@ -49,19 +49,79 @@ STRICT_SYSTEM_PROMPT = (
 
 MAX_INPUT_CHARS = 80_000  # ~20k tokens; keeps per-request cost under $0.09
 
+FINANCIAL_SYSTEM_PROMPT = """You are a financial-filing analysis assistant helping a reader understand a company's 10-K annual report.
 
-def analyze_lease(lease_text: str) -> dict:
-    lease_text = lease_text[:MAX_INPUT_CHARS]
+The filing text is broken into pages, each preceded by a marker like [PAGE 3]. Use the marker
+immediately before a passage to determine that passage's page number.
+
+Analyze the filing and return ONLY this JSON — no markdown fences, no extra text:
+
+{
+  "intro": "2-4 plain-English sentences on the most important things a reader should know about this filing",
+  "verdict": "standard" | "review" | "concern",
+  "keyMetrics": {
+    "totalRevenue": "dollar amount extracted from the filing, or null",
+    "netIncome": "dollar amount extracted from the filing, or null",
+    "totalDebt": "dollar amount extracted from the filing, or null",
+    "cashAndEquivalents": "dollar amount extracted from the filing, or null",
+    "operatingCashFlow": "dollar amount extracted from the filing, or null"
+  },
+  "categories": [
+    {
+      "name": "Risk Factors",
+      "severity": "red" | "yellow" | "green",
+      "findings": [
+        {
+          "summary": "Plain-English explanation of what this finding means for a reader",
+          "citation": {
+            "quote": "Verbatim excerpt from the filing this is based on (max 300 chars)",
+            "page": 12
+          },
+          "confidence": "high" | "medium" | "low"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- verdict: "standard" = nothing unusual; "review" = 1-2 yellow flags; "concern" = any red flag present
+- severity: red = high materiality/investor risk; yellow = worth noting; green = routine, nothing notable
+- Always return all six categories: Risk Factors, MD&A / Financial Performance, Liquidity & Capital Resources,
+  Related-Party Transactions, Legal Proceedings & Contingencies, Accounting Policy Changes
+- If a category has nothing material: severity "green", one finding with summary "Nothing material to report.",
+  citation null, confidence "high"
+- citation is MANDATORY for every finding except the "Nothing material to report." placeholder. Never omit it,
+  never fabricate a quote — if you cannot find a supporting passage, do not report the finding.
+- citation.quote: copy text verbatim (character-for-character) from the filing. Never paraphrase.
+- citation.page: the page number from the nearest [PAGE N] marker preceding the quoted text. Use null only if
+  genuinely undeterminable.
+- confidence: "high" = directly and unambiguously supported by the cited text; "medium" = supported but requires
+  some inference; "low" = a plausible reading but the filing language is ambiguous or the quote is indirect.
+- keyMetrics: extract actual values. Set each field to null if not found in the filing.
+- Return ONLY valid JSON. No markdown. No explanation."""
+
+FINANCIAL_STRICT_SYSTEM_PROMPT = (
+    FINANCIAL_SYSTEM_PROMPT
+    + "\n\nCRITICAL: Your previous response was not valid JSON, or was missing a required citation. "
+      "Return ONLY a raw JSON object. No ```json wrapper. Every finding except the placeholder must include "
+      "a citation with a verbatim quote."
+)
+
+MAX_FILING_INPUT_CHARS = 500_000  # ~125-165k tokens; ~$0.50/request ceiling on claude-sonnet-4-6's 1M context
+
+
+def _call_claude_with_retry(system: str, strict_system: str, user_content: str, max_tokens: int) -> dict:
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 
     for attempt in range(2):
-        system = SYSTEM_PROMPT if attempt == 0 else STRICT_SYSTEM_PROMPT
+        active_system = system if attempt == 0 else strict_system
         message = client.messages.create(
             model=model,
-            max_tokens=2048,
-            system=system,
-            messages=[{"role": "user", "content": f"Analyze this lease:\n\n{lease_text}"}],
+            max_tokens=max_tokens,
+            system=active_system,
+            messages=[{"role": "user", "content": user_content}],
         )
         raw = message.content[0].text.strip()
         if raw.startswith("```"):
@@ -76,3 +136,23 @@ def analyze_lease(lease_text: str) -> dict:
                 raise ValueError(f"Claude returned invalid JSON after 2 attempts: {raw[:200]}")
 
     raise ValueError("Unreachable")
+
+
+def analyze_lease(lease_text: str) -> dict:
+    lease_text = lease_text[:MAX_INPUT_CHARS]
+    return _call_claude_with_retry(
+        SYSTEM_PROMPT,
+        STRICT_SYSTEM_PROMPT,
+        f"Analyze this lease:\n\n{lease_text}",
+        max_tokens=2048,
+    )
+
+
+def analyze_financial_filing(filing_text: str) -> dict:
+    filing_text = filing_text[:MAX_FILING_INPUT_CHARS]
+    return _call_claude_with_retry(
+        FINANCIAL_SYSTEM_PROMPT,
+        FINANCIAL_STRICT_SYSTEM_PROMPT,
+        f"Analyze this 10-K filing:\n\n{filing_text}",
+        max_tokens=4096,
+    )

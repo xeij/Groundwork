@@ -1,30 +1,31 @@
 import { useState } from "react";
 import { getUploadUrl, uploadPdfToS3, analyzeLease, getSummary } from "../api/client";
 import { ApiError } from "../types";
+import type { DocumentType } from "../types";
 
 export type AnalysisPhase = "idle" | "uploading" | "analyzing" | "done" | "error";
 
-export interface UseLeaseAnalysisResult {
+export interface UseDocumentAnalysisResult {
   phase: AnalysisPhase;
   summaryId: string | null;
   errorMessage: string | null;
-  run: (file: File) => Promise<void>;
+  run: (file: File, documentType?: DocumentType) => Promise<void>;
   reset: () => void;
 }
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLLS = 40; // 2 minutes max
 
-export function useLeaseAnalysis(): UseLeaseAnalysisResult {
+export function useDocumentAnalysis(): UseDocumentAnalysisResult {
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [summaryId, setSummaryId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function run(file: File) {
+  async function run(file: File, documentType: DocumentType = "lease") {
     setPhase("uploading");
     setErrorMessage(null);
     try {
-      const { presignedUrl, s3Key } = await getUploadUrl();
+      const { presignedUrl, s3Key } = await getUploadUrl(documentType);
       await uploadPdfToS3(presignedUrl, file);
       setPhase("analyzing");
 

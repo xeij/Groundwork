@@ -1,4 +1,4 @@
-import type { UploadUrlResponse, AnalyzeResponse, SummaryRecord } from "../types";
+import type { UploadUrlResponse, AnalyzeResponse, SummaryRecord, DocumentType } from "../types";
 import { ApiError } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
@@ -11,8 +11,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function getUploadUrl(): Promise<UploadUrlResponse> {
-  const res = await fetch(`${API_URL}/upload`, { method: "POST" });
+export async function getUploadUrl(documentType: DocumentType = "lease"): Promise<UploadUrlResponse> {
+  const res = await fetch(`${API_URL}/upload?documentType=${documentType}`, { method: "POST" });
   return handleResponse<UploadUrlResponse>(res);
 }
 

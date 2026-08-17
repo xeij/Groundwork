@@ -5,9 +5,10 @@ const MAX_BYTES = 20 * 1024 * 1024;
 
 interface Props {
   onFile: (file: File) => void;
+  captionLabel?: string;
 }
 
-export function DropZone({ onFile }: Props) {
+export function DropZone({ onFile, captionLabel = "Lease documents only" }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -58,10 +59,10 @@ export function DropZone({ onFile }: Props) {
     >
       <div style={{ fontSize: "2rem", marginBottom: "0.75rem", opacity: 0.5 }}>&#128196;</div>
       <p style={{ margin: "0 0 0.35rem", color: "#e6edf3", fontWeight: 500 }}>
-        Drag &amp; drop your lease PDF here, or click to select
+        Drag &amp; drop your PDF here, or click to select
       </p>
       <p style={{ margin: 0, fontSize: "0.875rem", color: "#8b949e" }}>
-        Lease documents only &middot; max size 20 megabytes
+        {captionLabel} &middot; max size 20 megabytes
       </p>
       {error && <p style={{ color: "#f85149", marginTop: "0.75rem", margin: "0.75rem 0 0", fontSize: "0.875rem" }}>{error}</p>}
       <input

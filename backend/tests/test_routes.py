@@ -9,8 +9,40 @@ from app.main import app
 client = TestClient(app)
 
 VALID_S3_KEY = "leases/12345678-1234-1234-1234-123456789abc.pdf"
+VALID_FILING_S3_KEY = "filings/12345678-1234-1234-1234-123456789abc.pdf"
 
 _FINDING_OK = {"summary": "Nothing concerning here.", "quote": None, "action": "No action needed."}
+_FILING_FINDING_OK = {"summary": "Nothing material to report.", "citation": None, "confidence": "high"}
+
+SAMPLE_FILING_RESPONSE = {
+    "intro": "This filing shows steady revenue growth with one notable litigation risk.",
+    "verdict": "review",
+    "keyMetrics": {
+        "totalRevenue": "$4.2B",
+        "netIncome": "$310M",
+        "totalDebt": "$1.1B",
+        "cashAndEquivalents": "$600M",
+        "operatingCashFlow": "$450M",
+    },
+    "categories": [
+        {
+            "name": "Risk Factors",
+            "severity": "yellow",
+            "findings": [
+                {
+                    "summary": "Pending litigation could materially affect results.",
+                    "citation": {"quote": "The Company is subject to a pending lawsuit.", "page": 14},
+                    "confidence": "medium",
+                }
+            ],
+        },
+        {"name": "MD&A / Financial Performance", "severity": "green", "findings": [_FILING_FINDING_OK]},
+        {"name": "Liquidity & Capital Resources", "severity": "green", "findings": [_FILING_FINDING_OK]},
+        {"name": "Related-Party Transactions", "severity": "green", "findings": [_FILING_FINDING_OK]},
+        {"name": "Legal Proceedings & Contingencies", "severity": "green", "findings": [_FILING_FINDING_OK]},
+        {"name": "Accounting Policy Changes", "severity": "green", "findings": [_FILING_FINDING_OK]},
+    ],
+}
 
 SAMPLE_CLAUDE_RESPONSE = {
     "intro": "Overall this lease is standard.",
@@ -40,6 +72,14 @@ def test_post_upload_returns_presigned_url_and_key(s3_bucket):
     assert data["presignedUrl"].startswith("https://")
     assert data["s3Key"].startswith("leases/")
     assert data["s3Key"].endswith(".pdf")
+
+
+@mock_aws
+def test_post_upload_with_filing_document_type_uses_filings_prefix(s3_bucket):
+    response = client.post("/upload?documentType=filing")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["s3Key"].startswith("filings/")
 
 
 @mock_aws
@@ -107,6 +147,43 @@ def test_get_summary_returns_stored_summary(dynamodb_table):
 def test_get_summary_returns_404_for_unknown_id(dynamodb_table):
     response = client.get("/summary/00000000")
     assert response.status_code == 404
+
+
+@mock_aws
+def test_get_summary_returns_filing_shape_for_filing_document_type(dynamodb_table):
+    from app.services.summary_store import save_summary
+
+    summary_id = save_summary(SAMPLE_FILING_RESPONSE, document_type="filing")
+
+    response = client.get(f"/summary/{summary_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["documentType"] == "filing"
+    assert len(data["summary"]["categories"]) == 6
+    assert data["summary"]["keyMetrics"]["totalRevenue"] == "$4.2B"
+
+
+@mock_aws
+def test_process_async_stores_completed_filing_summary(s3_bucket, dynamodb_table):
+    from app.services.summary_store import save_pending, get_summary
+    from app.main import _process_async
+    import json as _json
+
+    sample_pdf = open("tests/fixtures/sample_lease.pdf", "rb").read()
+    s3_bucket.put_object(Bucket="test-lease-bucket", Key=VALID_FILING_S3_KEY, Body=sample_pdf)
+    save_pending("filng123", VALID_FILING_S3_KEY, "filing")
+
+    mock_msg = MagicMock()
+    mock_msg.content = [MagicMock(text=_json.dumps(SAMPLE_FILING_RESPONSE))]
+
+    with patch("app.services.claude_client.anthropic.Anthropic") as MockAnthropic:
+        MockAnthropic.return_value.messages.create.return_value = mock_msg
+        _process_async("filng123", VALID_FILING_S3_KEY)
+
+    item = get_summary("filng123")
+    assert item["status"] == "done"
+    assert item["documentType"] == "filing"
+    assert item["summary"]["intro"] == SAMPLE_FILING_RESPONSE["intro"]
 
 
 @mock_aws
