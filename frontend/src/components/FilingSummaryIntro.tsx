@@ -19,7 +19,7 @@ export function FilingSummaryIntro({ summary }: { summary: FinancialSummary }) {
   const vc = VERDICT_CONFIG[verdict];
 
   const metrics = summary.keyMetrics
-    ? Object.entries(summary.keyMetrics).filter(([, v]) => v != null)
+    ? Object.entries(summary.keyMetrics).filter(([k, v]) => v != null && k !== "tickerSymbol")
     : [];
 
   return (

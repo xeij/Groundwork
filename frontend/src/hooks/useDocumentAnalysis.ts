@@ -13,8 +13,13 @@ export interface UseDocumentAnalysisResult {
   reset: () => void;
 }
 
-const POLL_INTERVAL_MS = 3000;
-const MAX_POLLS = 40; // 2 minutes max
+// Budgets are tuned to the backend's actual worst-case processing time (see
+// LEASE_CLAUDE_BUDGET_SECONDS / FILING_CLAUDE_BUDGET_SECONDS + Lambda Timeout in claude_client.py /
+// template.yaml), with margin — filings involve a much larger Claude call than leases.
+const POLL_CONFIG: Record<DocumentType, { intervalMs: number; maxPolls: number }> = {
+  lease: { intervalMs: 3000, maxPolls: 40 }, // ~2 minutes
+  filing: { intervalMs: 5000, maxPolls: 70 }, // ~5.8 minutes
+};
 
 export function useDocumentAnalysis(): UseDocumentAnalysisResult {
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
@@ -30,9 +35,10 @@ export function useDocumentAnalysis(): UseDocumentAnalysisResult {
       setPhase("analyzing");
 
       const { summaryId: id } = await analyzeLease(s3Key);
+      const { intervalMs, maxPolls } = POLL_CONFIG[documentType];
 
-      for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
-        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      for (let attempt = 0; attempt < maxPolls; attempt++) {
+        await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
         try {
           await getSummary(id);
           setSummaryId(id);

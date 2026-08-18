@@ -49,7 +49,7 @@ export function UploadPage() {
     >
       <div style={{ marginBottom: "2.5rem" }}>
         <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: "0 0 0.4rem", color: "#e6edf3" }}>
-          honestLease
+          Groundwork
         </h1>
         <p style={{ color: "#8b949e", margin: 0, lineHeight: 1.6 }}>{copy.subheading}</p>
       </div>

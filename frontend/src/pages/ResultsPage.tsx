@@ -5,6 +5,7 @@ import { CategoryCard } from "../components/CategoryCard";
 import { SummaryIntro } from "../components/SummaryIntro";
 import { FinancialCategoryCard } from "../components/FinancialCategoryCard";
 import { FilingSummaryIntro } from "../components/FilingSummaryIntro";
+import { StockChart } from "../components/StockChart";
 import { ShareButton } from "../components/ShareButton";
 import { ErrorBanner } from "../components/ErrorBanner";
 
@@ -78,6 +79,10 @@ export function ResultsPage() {
         </div>
 
         <FilingSummaryIntro summary={data.summary} />
+
+        {data.summary.keyMetrics?.tickerSymbol && (
+          <StockChart ticker={data.summary.keyMetrics.tickerSymbol} />
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "2rem" }}>
           {data.summary.categories.map((cat) => (

@@ -93,6 +93,7 @@ const FILING_RECORD: FilingSummaryRecord = {
       totalDebt: "$1.1B",
       cashAndEquivalents: "$600M",
       operatingCashFlow: "$450M",
+      tickerSymbol: "ACME",
     },
     categories: [
       {
@@ -117,6 +118,7 @@ const FILING_RECORD: FilingSummaryRecord = {
 
 test("renders filing-specific layout for filing document type", async () => {
   vi.mocked(apiClient.getSummary).mockResolvedValue(FILING_RECORD);
+  vi.mocked(apiClient.getStockChart).mockImplementation(() => new Promise(() => {}));
   renderPage("flg12345");
   expect(await screen.findByText(FILING_RECORD.summary.intro)).toBeInTheDocument();
   expect(screen.getByText("Filing Summary")).toBeInTheDocument();
@@ -124,4 +126,33 @@ test("renders filing-specific layout for filing document type", async () => {
   expect(screen.getByText(/pending litigation/i)).toBeInTheDocument();
   expect(screen.getByText(/medium confidence/i)).toBeInTheDocument();
   expect(screen.getByText(/page 14/i)).toBeInTheDocument();
+});
+
+test("renders stock chart when the filing has a ticker symbol", async () => {
+  vi.mocked(apiClient.getSummary).mockResolvedValue(FILING_RECORD);
+  vi.mocked(apiClient.getStockChart).mockResolvedValue({
+    ticker: "ACME",
+    points: [
+      { date: "2026-01-02", close: 100 },
+      { date: "2026-06-15", close: 110 },
+    ],
+    changePercent: 10,
+  });
+  renderPage("flg12345");
+  expect(await screen.findByText(/ACME/)).toBeInTheDocument();
+  expect(await screen.findByText("+10.00%")).toBeInTheDocument();
+});
+
+test("omits stock chart when the filing has no ticker symbol", async () => {
+  const noTickerRecord: FilingSummaryRecord = {
+    ...FILING_RECORD,
+    summary: {
+      ...FILING_RECORD.summary,
+      keyMetrics: { ...FILING_RECORD.summary.keyMetrics!, tickerSymbol: null },
+    },
+  };
+  vi.mocked(apiClient.getSummary).mockResolvedValue(noTickerRecord);
+  renderPage("flg12345");
+  await screen.findByText(FILING_RECORD.summary.intro);
+  expect(screen.queryByText(/loading price chart/i)).not.toBeInTheDocument();
 });

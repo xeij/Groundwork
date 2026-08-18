@@ -68,6 +68,18 @@ export interface KeyMetrics {
   totalDebt: string | null;
   cashAndEquivalents: string | null;
   operatingCashFlow: string | null;
+  tickerSymbol: string | null;
+}
+
+export interface StockPricePoint {
+  date: string;
+  close: number;
+}
+
+export interface StockChartData {
+  ticker: string;
+  points: StockPricePoint[];
+  changePercent: number;
 }
 
 export interface FinancialSummary {

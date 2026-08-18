@@ -19,7 +19,7 @@ function renderPage() {
 
 test("renders the upload heading", () => {
   renderPage();
-  expect(screen.getByText(/honestlease/i)).toBeInTheDocument();
+  expect(screen.getByText(/groundwork/i)).toBeInTheDocument();
 });
 
 test("analyze button is disabled before file is selected", () => {
