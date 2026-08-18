@@ -9,15 +9,16 @@ import type { DocumentType } from "../types";
 const COPY: Record<DocumentType, { subheading: string; caption: string; button: string }> = {
   lease: {
     subheading:
-      "Upload your residential lease and get a plain-English breakdown of auto-renewal traps, " +
-      "deposit conditions, unusual fees, and what's missing — with exact quotes and specific things to ask for.",
+      "Upload your residential lease and see what actually matters: auto-renewal traps, deposit conditions, " +
+      "hidden fees, and anything standard that's missing. You'll get the exact quote for each issue and " +
+      "something specific to ask your landlord.",
     caption: "Lease documents only",
     button: "Analyze my lease",
   },
   filing: {
     subheading:
-      "Upload a 10-K annual report and get a structured breakdown of risk factors, financial performance, " +
-      "and liquidity — every finding backed by a verbatim citation and a confidence score.",
+      "Upload a 10-K and we'll flag the risk factors, financial performance, and liquidity issues worth knowing " +
+      "about. Every finding points back to the exact page it came from, plus how confident we are in it.",
     caption: "10-K filings only",
     button: "Analyze this filing",
   },

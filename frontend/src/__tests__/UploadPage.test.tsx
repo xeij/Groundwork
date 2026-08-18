@@ -50,7 +50,7 @@ test("shows uploading state when analysis starts", async () => {
 test("selecting 10-K Filing switches subheading and caption copy", async () => {
   renderPage();
   await userEvent.click(screen.getByRole("button", { name: /10-k filing/i }));
-  expect(screen.getByText(/10-k annual report/i)).toBeInTheDocument();
+  expect(screen.getByText(/liquidity issues worth knowing/i)).toBeInTheDocument();
   expect(screen.getByText(/10-k filings only/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /analyze this filing/i })).toBeInTheDocument();
 });
