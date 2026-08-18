@@ -1,6 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 import pytest
+from app.services import claude_client
 from app.services.claude_client import analyze_lease, analyze_financial_filing
 
 _FINDING_OK = {"summary": "Nothing concerning here.", "quote": None, "action": "No action needed."}
@@ -48,6 +49,7 @@ def _mock_claude(response_text: str):
     mock_msg = MagicMock()
     mock_msg.content = [MagicMock(text=response_text)]
     mock_client = MagicMock()
+    mock_client.with_options.return_value = mock_client
     mock_client.messages.create.return_value = mock_msg
     return mock_client
 
@@ -74,6 +76,7 @@ def test_analyze_lease_retries_on_malformed_json():
 
     with patch("app.services.claude_client.anthropic.Anthropic") as MockAnthropic:
         mock_client = MagicMock()
+        mock_client.with_options.return_value = mock_client
         mock_client.messages.create.side_effect = side_effect
         MockAnthropic.return_value = mock_client
         result = analyze_lease("Sample lease text " * 50)
@@ -152,6 +155,7 @@ def test_analyze_financial_filing_retries_on_malformed_json():
 
     with patch("app.services.claude_client.anthropic.Anthropic") as MockAnthropic:
         mock_client = MagicMock()
+        mock_client.with_options.return_value = mock_client
         mock_client.messages.create.side_effect = side_effect
         MockAnthropic.return_value = mock_client
         result = analyze_financial_filing("Sample filing text " * 50)
@@ -173,3 +177,32 @@ def test_analyze_financial_filing_strips_markdown_fences():
         MockAnthropic.return_value = _mock_claude(fenced)
         result = analyze_financial_filing("Sample filing text " * 50)
     assert result["intro"] == VALID_FILING_RESPONSE["intro"]
+
+
+def test_analyze_financial_filing_passes_bounded_timeout_and_disables_sdk_retries():
+    with patch("app.services.claude_client.anthropic.Anthropic") as MockAnthropic:
+        mock_client = _mock_claude(json.dumps(VALID_FILING_RESPONSE))
+        MockAnthropic.return_value = mock_client
+        analyze_financial_filing("Sample filing text " * 50)
+
+    assert mock_client.with_options.call_count == 1
+    _, kwargs = mock_client.with_options.call_args
+    assert kwargs["max_retries"] == 0
+    assert 0 < kwargs["timeout"] <= claude_client.FILING_CLAUDE_BUDGET_SECONDS
+
+
+def test_analyze_financial_filing_raises_timeout_error_when_budget_exhausted():
+    """If the first (malformed-JSON) attempt eats the whole budget, don't attempt a second
+    call — raise a clean TimeoutError instead of letting the caller hang indefinitely."""
+    with patch("app.services.claude_client.anthropic.Anthropic") as MockAnthropic, patch(
+        "app.services.claude_client.time.monotonic"
+    ) as mock_monotonic:
+        # 1 call to set the deadline, then 1 remaining-time check per attempt reached.
+        mock_monotonic.side_effect = [0, 0, 10_000]
+        mock_client = _mock_claude("not valid json at all")
+        MockAnthropic.return_value = mock_client
+
+        with pytest.raises(TimeoutError, match="budget"):
+            analyze_financial_filing("Sample filing text " * 50)
+
+    mock_client.messages.create.assert_called_once()

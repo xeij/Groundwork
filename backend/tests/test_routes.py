@@ -177,6 +177,7 @@ def test_process_async_stores_completed_filing_summary(s3_bucket, dynamodb_table
     mock_msg.content = [MagicMock(text=_json.dumps(SAMPLE_FILING_RESPONSE))]
 
     with patch("app.services.claude_client.anthropic.Anthropic") as MockAnthropic:
+        MockAnthropic.return_value.with_options.return_value = MockAnthropic.return_value
         MockAnthropic.return_value.messages.create.return_value = mock_msg
         _process_async("filng123", VALID_FILING_S3_KEY)
 
@@ -200,9 +201,37 @@ def test_process_async_stores_completed_summary(s3_bucket, dynamodb_table):
     mock_msg.content = [MagicMock(text=_json.dumps(SAMPLE_CLAUDE_RESPONSE))]
 
     with patch("app.services.claude_client.anthropic.Anthropic") as MockAnthropic:
+        MockAnthropic.return_value.with_options.return_value = MockAnthropic.return_value
         MockAnthropic.return_value.messages.create.return_value = mock_msg
         _process_async("proc1234", VALID_S3_KEY)
 
     item = get_summary("proc1234")
     assert item["status"] == "done"
     assert item["summary"]["intro"] == SAMPLE_CLAUDE_RESPONSE["intro"]
+
+
+def test_get_stock_chart_returns_price_series():
+    from app.services.stock_data import StockDataError
+
+    fake_result = {
+        "ticker": "AAPL",
+        "points": [{"date": "2026-01-02", "close": 181.5}, {"date": "2026-06-15", "close": 196.25}],
+        "changePercent": 8.13,
+    }
+    with patch("app.routes.stock_chart.fetch_ytd_prices", return_value=fake_result):
+        response = client.get("/stock-chart/AAPL")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ticker"] == "AAPL"
+    assert len(data["points"]) == 2
+    assert data["changePercent"] == 8.13
+
+
+def test_get_stock_chart_returns_404_when_unavailable():
+    from app.services.stock_data import StockDataError
+
+    with patch("app.routes.stock_chart.fetch_ytd_prices", side_effect=StockDataError("No YTD price data available for ZZZZ")):
+        response = client.get("/stock-chart/ZZZZ")
+
+    assert response.status_code == 404

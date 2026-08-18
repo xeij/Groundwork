@@ -123,6 +123,7 @@ class KeyMetrics(BaseModel):
     totalDebt: Optional[str] = None
     cashAndEquivalents: Optional[str] = None
     operatingCashFlow: Optional[str] = None
+    tickerSymbol: Optional[str] = None
 
 
 class FinancialFilingSummary(BaseModel):
@@ -137,3 +138,14 @@ class FilingSummaryRecord(BaseModel):
     documentType: Literal["filing"] = "filing"
     summary: FinancialFilingSummary
     createdAt: int
+
+
+class StockPricePoint(BaseModel):
+    date: str
+    close: float
+
+
+class StockChartResponse(BaseModel):
+    ticker: str
+    points: list[StockPricePoint]
+    changePercent: float

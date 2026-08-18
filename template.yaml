@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: honestLease — residential lease PDF analyzer
+Description: Groundwork — document intelligence for leases and financial filings, with citation-grounded findings
 
 Parameters:
   AnthropicApiKey:
@@ -15,7 +15,7 @@ Parameters:
 Globals:
   Function:
     Runtime: python3.12
-    Timeout: 180
+    Timeout: 300
     MemorySize: 1024
     Environment:
       Variables:

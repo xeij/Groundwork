@@ -5,11 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
-from .routes import upload, analyze, summary
+from .routes import upload, analyze, summary, stock_chart
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="honestLease API")
+app = FastAPI(title="Groundwork API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +21,7 @@ app.add_middleware(
 app.include_router(upload.router)
 app.include_router(analyze.router)
 app.include_router(summary.router)
+app.include_router(stock_chart.router)
 
 _mangum = Mangum(app)
 
