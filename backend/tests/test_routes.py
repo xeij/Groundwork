@@ -128,6 +128,31 @@ def test_get_summary_returns_202_with_current_step(dynamodb_table):
     response = client.get("/summary/test5678")
     assert response.status_code == 202
     assert response.json()["step"] == "analyzing"
+    assert response.json()["detail"] is None
+
+
+@mock_aws
+def test_get_summary_returns_202_with_step_detail(dynamodb_table):
+    from app.services.summary_store import save_pending, update_progress
+    save_pending("test9012", VALID_S3_KEY, document_type="filing")
+    update_progress("test9012", "extracting_text", "Reading page 42 of 210")
+
+    response = client.get("/summary/test9012")
+    assert response.status_code == 202
+    assert response.json()["step"] == "extracting_text"
+    assert response.json()["detail"] == "Reading page 42 of 210"
+
+
+@mock_aws
+def test_update_progress_clears_stale_detail_on_step_change(dynamodb_table):
+    from app.services.summary_store import save_pending, update_progress, get_summary
+    save_pending("test3456", VALID_S3_KEY, document_type="filing")
+    update_progress("test3456", "extracting_text", "Reading page 210 of 210")
+    update_progress("test3456", "analyzing")
+
+    item = get_summary("test3456")
+    assert item["step"] == "analyzing"
+    assert item["detail"] is None
 
 
 @mock_aws

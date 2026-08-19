@@ -11,12 +11,25 @@ Parameters:
     Type: String
     Default: "*"
     Description: Comma-separated list of allowed CORS origins (set to your Amplify URL in production)
+  SecUserAgent:
+    Type: String
+    Default: "Groundwork/1.0 (support@example.com)"
+    Description: >-
+      User-Agent sent to SEC EDGAR. Must contain an email address: www.sec.gov returns 403
+      without one, which breaks filing downloads. EDGAR does not verify the address, but the
+      SEC's access policy expects a genuine one so they can contact you rather than block
+      you — replace this placeholder with your own.
 
 Globals:
   Function:
     Runtime: python3.12
-    Timeout: 300
-    MemorySize: 1024
+    # An EDGAR-sourced analysis fans out across six category calls, two year-over-year
+    # section diffs, and a dozen peer XBRL fetches. Must stay above the sum of the
+    # per-stage Claude budgets in filing_analysis.py, and below the frontend's poll
+    # window in useDocumentAnalysis.ts.
+    Timeout: 600
+    # 12 peer companyfacts payloads at ~4MB each, plus filing text for two years.
+    MemorySize: 2048
     Environment:
       Variables:
         S3_BUCKET_NAME: !Ref LeasePdfBucket
@@ -24,6 +37,7 @@ Globals:
         ANTHROPIC_API_KEY: !Ref AnthropicApiKey
         CLAUDE_MODEL: claude-sonnet-4-6
         ALLOWED_ORIGINS: !Ref AllowedOrigins
+        SEC_USER_AGENT: !Ref SecUserAgent
 
 Resources:
   HttpApi:

@@ -123,3 +123,18 @@ button {
   border-top-color: var(--color-foreground);
   animation: spin 0.85s linear infinite;
 }
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.log-line {
+  animation: rise 0.35s ease;
+}

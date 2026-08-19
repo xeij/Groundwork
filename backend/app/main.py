@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
-from .routes import upload, analyze, summary, stock_chart
+from .routes import upload, analyze, summary, stock_chart, company
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ app.include_router(upload.router)
 app.include_router(analyze.router)
 app.include_router(summary.router)
 app.include_router(stock_chart.router)
+app.include_router(company.router)
 
 _mangum = Mangum(app)
 
@@ -31,8 +32,27 @@ def handler(event, context):
     if "summaryId" in event and "s3Key" in event:
         _process_async(event["summaryId"], event["s3Key"])
         return
+    if "summaryId" in event and "ticker" in event:
+        _process_ticker_async(event["summaryId"], event["ticker"])
+        return
 
     return _mangum(event, context)
+
+
+def _process_ticker_async(summary_id: str, ticker: str) -> None:
+    """Full EDGAR-sourced analysis: no S3 object is involved, so nothing to clean up."""
+    from .services import filing_pipeline
+    from .services.summary_store import update_summary, mark_failed, update_progress
+
+    def report(step: str, detail: str | None = None) -> None:
+        update_progress(summary_id, step, detail)
+
+    try:
+        result = filing_pipeline.analyze_ticker(ticker, progress=report)
+        update_summary(summary_id, result)
+    except Exception as e:
+        logger.exception("Ticker analysis failed for %s (%s)", summary_id, ticker)
+        mark_failed(summary_id, str(e))
 
 
 def _process_async(summary_id: str, s3_key: str) -> None:
@@ -42,16 +62,19 @@ def _process_async(summary_id: str, s3_key: str) -> None:
 
     document_type = document_type_from_s3_key(s3_key)
 
+    def report_page_progress(current: int, total: int) -> None:
+        update_progress(summary_id, "extracting_text", f"Reading page {current} of {total}")
+
     try:
         update_progress(summary_id, "extracting_text")
         pdf_bytes = storage.fetch_pdf(s3_key)
         try:
             if document_type == "filing":
-                pages = pdf_parser.extract_pages(pdf_bytes)
+                pages = pdf_parser.extract_pages(pdf_bytes, on_progress=report_page_progress)
                 pdf_parser.validate_text("\n\n".join(pages))
                 text = pdf_parser.format_paginated_text(pages)
             else:
-                text = pdf_parser.extract_text(pdf_bytes)
+                text = pdf_parser.extract_text(pdf_bytes, on_progress=report_page_progress)
                 pdf_parser.validate_text(text)
         except Exception as e:
             storage.delete_pdf(s3_key)

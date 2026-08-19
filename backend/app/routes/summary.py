@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from ..models import SummaryRecord, Summary, FilingSummaryRecord, FinancialFilingSummary
+from ..models import SummaryRecord, Summary, FilingAnalysisRecord, FilingAnalysis
 from ..services.summary_store import get_summary
 
 router = APIRouter()
@@ -16,7 +16,10 @@ def get(summary_id: str):
     status = item.get("status", "done")
 
     if status == "pending":
-        return JSONResponse(status_code=202, content={"status": "pending", "step": item.get("step")})
+        return JSONResponse(
+            status_code=202,
+            content={"status": "pending", "step": item.get("step"), "detail": item.get("detail")},
+        )
 
     if status == "failed":
         raise HTTPException(status_code=422, detail="Analysis failed. Please try uploading again.")
@@ -24,9 +27,11 @@ def get(summary_id: str):
     document_type = item.get("documentType", "lease")
 
     if document_type == "filing":
-        return FilingSummaryRecord(
+        # FilingAnalysis is a superset of the pre-EDGAR filing shape — every field it
+        # adds is optional — so summaries stored by the old pipeline still load here.
+        return FilingAnalysisRecord(
             summaryId=item["summaryId"],
-            summary=FinancialFilingSummary(**item["summary"]),
+            summary=FilingAnalysis(**item["summary"]),
             createdAt=item["createdAt"],
         )
 

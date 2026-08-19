@@ -5,6 +5,7 @@ import type {
   DocumentType,
   StockChartData,
   AnalysisStep,
+  CompanySearchResult,
 } from "../types";
 import { ApiError, PendingError } from "../types";
 
@@ -45,7 +46,8 @@ export async function getSummary(summaryId: string): Promise<SummaryRecord> {
   const res = await fetch(`${API_URL}/summary/${summaryId}`);
   if (res.status === 202) {
     const body = await res.json().catch(() => ({}));
-    throw new PendingError((body as { step?: AnalysisStep | null }).step ?? null);
+    const { step, detail } = body as { step?: AnalysisStep | null; detail?: string | null };
+    throw new PendingError(step ?? null, detail ?? null);
   }
   return handleResponse<SummaryRecord>(res);
 }
@@ -53,4 +55,18 @@ export async function getSummary(summaryId: string): Promise<SummaryRecord> {
 export async function getStockChart(ticker: string): Promise<StockChartData> {
   const res = await fetch(`${API_URL}/stock-chart/${encodeURIComponent(ticker)}`);
   return handleResponse<StockChartData>(res);
+}
+
+export async function searchCompanies(query: string): Promise<CompanySearchResult[]> {
+  const res = await fetch(`${API_URL}/companies?q=${encodeURIComponent(query)}`);
+  return handleResponse<CompanySearchResult[]>(res);
+}
+
+export async function analyzeTicker(ticker: string): Promise<AnalyzeResponse> {
+  const res = await fetch(`${API_URL}/analyze-ticker`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticker }),
+  });
+  return handleResponse<AnalyzeResponse>(res);
 }

@@ -45,3 +45,15 @@ def test_format_paginated_text_emits_ordered_page_markers():
     assert "[PAGE 1]\nfirst page text" in result
     assert "[PAGE 2]\nsecond page text" in result
     assert result.index("[PAGE 1]") < result.index("[PAGE 2]")
+
+
+def test_extract_pages_reports_progress_on_last_page():
+    pdf_bytes = _make_pdf("This is a sample filing with enough content.")
+    calls = []
+    extract_pages(pdf_bytes, on_progress=lambda current, total: calls.append((current, total)))
+    assert calls[-1] == (1, 1)
+
+
+def test_extract_text_without_on_progress_still_works():
+    pdf_bytes = _make_pdf("This is a sample lease agreement with enough content.")
+    assert "lease" in extract_text(pdf_bytes).lower()

@@ -4,10 +4,11 @@ import { DropZone } from "../components/DropZone";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Header } from "../components/Header";
+import { TickerSearch } from "../components/TickerSearch";
 import { Button } from "../components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { useDocumentAnalysis } from "../hooks/useDocumentAnalysis";
-import type { DocumentType } from "../types";
+import type { CompanySearchResult, DocumentType } from "../types";
 
 const COPY: Record<DocumentType, { subheading: string; caption: string; button: string }> = {
   lease: {
@@ -20,8 +21,9 @@ const COPY: Record<DocumentType, { subheading: string; caption: string; button: 
   },
   filing: {
     subheading:
-      "Upload a 10-K and we'll flag the risk factors, financial performance, and liquidity issues worth knowing " +
-      "about. Every finding points back to the exact page it came from, plus how confident we are in it.",
+      "Name a public company and we'll pull its latest 10-K straight from SEC EDGAR, then tell you what " +
+      "changed since last year's filing, what the tagged financials say that the narrative doesn't, and " +
+      "how it ranks against its industry peers. Every quote is checked back against the filing text.",
     caption: "10-K filings only",
     button: "Analyze this filing",
   },
@@ -29,9 +31,11 @@ const COPY: Record<DocumentType, { subheading: string; caption: string; button: 
 
 export function UploadPage() {
   const navigate = useNavigate();
-  const { phase, step, summaryId, errorMessage, run, reset } = useDocumentAnalysis();
+  const { phase, step, source, log, summaryId, errorMessage, run, runTicker, reset } =
+    useDocumentAnalysis();
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<DocumentType>("lease");
+  const [company, setCompany] = useState<CompanySearchResult | null>(null);
 
   useEffect(() => {
     if (phase === "done" && summaryId) {
@@ -41,6 +45,7 @@ export function UploadPage() {
 
   const isRunning = phase === "uploading" || phase === "analyzing";
   const copy = COPY[documentType];
+  const isFiling = documentType === "filing";
 
   return (
     <div className="min-h-screen">
@@ -75,16 +80,54 @@ export function UploadPage() {
           </div>
         )}
 
-        {!isRunning && (
+        {!isRunning && isFiling && (
           <>
-            <DropZone onFile={setFile} captionLabel={copy.caption} />
-            <Button onClick={() => file && run(file, documentType)} disabled={!file} className="mt-4 w-full" size="lg">
-              {copy.button}
+            <TickerSearch onSelect={setCompany} selected={company} />
+            <Button
+              onClick={() => company && runTicker(company.ticker)}
+              disabled={!company}
+              className="mt-4 w-full"
+              size="lg"
+            >
+              {company ? `Analyze ${company.ticker}'s latest 10-K` : "Analyze the latest 10-K"}
             </Button>
+
+            <div className="my-7 flex items-center gap-3">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground">or upload a PDF</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
           </>
         )}
 
-        <ProgressIndicator phase={phase} step={step} documentType={documentType} />
+        {!isRunning && (
+          <>
+            <DropZone onFile={setFile} captionLabel={copy.caption} />
+            <Button
+              onClick={() => file && run(file, documentType)}
+              disabled={!file}
+              className="mt-4 w-full"
+              size="lg"
+              variant={isFiling ? "outline" : "default"}
+            >
+              {copy.button}
+            </Button>
+            {isFiling && (
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                A PDF is analyzed on its own. Pulling the filing from EDGAR instead is what makes the
+                year-over-year comparison, peer ranking and XBRL cross-check possible.
+              </p>
+            )}
+          </>
+        )}
+
+        <ProgressIndicator
+          phase={phase}
+          step={step}
+          log={log}
+          documentType={documentType}
+          source={source}
+        />
       </div>
     </div>
   );
