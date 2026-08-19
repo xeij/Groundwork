@@ -1,3 +1,6 @@
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+
 interface Props {
   message: string;
   onDismiss?: () => void;
@@ -5,40 +8,13 @@ interface Props {
 
 export function ErrorBanner({ message, onDismiss }: Props) {
   return (
-    <div
-      role="alert"
-      style={{
-        background: "var(--red-wash)",
-        border: "1px solid var(--red-border)",
-        borderRadius: "var(--radius-sm)",
-        padding: "0.75rem 0.9rem",
-        color: "var(--red)",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        gap: "0.6rem",
-        fontSize: "0.88rem",
-        lineHeight: 1.5,
-      }}
-    >
-      <span>{message}</span>
+    <Alert variant="destructive" className="flex items-start justify-between gap-3">
+      <AlertDescription>{message}</AlertDescription>
       {onDismiss && (
-        <button
-          onClick={onDismiss}
-          aria-label="Dismiss error"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: "var(--red)",
-            fontWeight: 700,
-            flexShrink: 0,
-            opacity: 0.8,
-          }}
-        >
-          &#x2715;
-        </button>
+        <Button variant="ghost" size="sm" onClick={onDismiss} className="h-auto shrink-0 px-2 py-0.5 text-current hover:bg-destructive/15">
+          Dismiss
+        </Button>
       )}
-    </div>
+    </Alert>
   );
 }

@@ -1,20 +1,13 @@
 import { useRef, useState } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getStockChart } from "../api/client";
+import { Card } from "./ui/card";
 
 const WIDTH = 640;
 const HEIGHT = 180;
 const PAD_X = 8;
 const PAD_Y = 14;
-
-const CARD_STYLE: CSSProperties = {
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
-  background: "var(--surface)",
-  padding: "1rem 1.25rem",
-  marginBottom: "0.75rem",
-};
 
 export function StockChart({ ticker }: { ticker: string }) {
   const { data, isLoading, isError } = useQuery({
@@ -27,17 +20,15 @@ export function StockChart({ ticker }: { ticker: string }) {
 
   if (isLoading) {
     return (
-      <div style={{ ...CARD_STYLE, color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center" }}>
-        Loading price chart...
-      </div>
+      <Card className="mb-3 px-5 py-4 text-center text-sm text-muted-foreground">Loading price chart...</Card>
     );
   }
 
   if (isError || !data || data.points.length < 2) {
     return (
-      <div style={{ ...CARD_STYLE, color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center" }}>
+      <Card className="mb-3 px-5 py-4 text-center text-sm text-muted-foreground">
         Price chart unavailable for {ticker}.
-      </div>
+      </Card>
     );
   }
 
@@ -53,7 +44,7 @@ export function StockChart({ ticker }: { ticker: string }) {
   const areaPath = `${linePath} L${coords[coords.length - 1][0].toFixed(2)},${HEIGHT - PAD_Y} L${coords[0][0].toFixed(2)},${HEIGHT - PAD_Y} Z`;
 
   const isUp = data.changePercent >= 0;
-  const color = isUp ? "var(--green)" : "var(--red)";
+  const color = isUp ? "var(--success)" : "var(--destructive)";
 
   function handleMouseMove(e: MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current;
@@ -81,10 +72,10 @@ export function StockChart({ ticker }: { ticker: string }) {
   }
 
   return (
-    <div style={CARD_STYLE}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.5rem" }}>
-        <span style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>{data.ticker} &middot; YTD</span>
-        <span style={{ fontSize: "0.9rem", fontWeight: 600, color }}>
+    <Card className="mb-3 px-5 py-4">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="text-sm font-semibold text-foreground">{data.ticker} &middot; YTD</span>
+        <span className="text-sm font-semibold" style={{ color }}>
           {isUp ? "+" : ""}
           {data.changePercent.toFixed(2)}%
         </span>
@@ -97,7 +88,7 @@ export function StockChart({ ticker }: { ticker: string }) {
         height={HEIGHT}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoverIndex(null)}
-        style={{ display: "block", cursor: "crosshair" }}
+        className="block cursor-crosshair"
         role="img"
         aria-label={`${data.ticker} year-to-date closing price chart, ${isUp ? "up" : "down"} ${Math.abs(data.changePercent).toFixed(2)} percent`}
       >
@@ -105,23 +96,23 @@ export function StockChart({ ticker }: { ticker: string }) {
         <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {hoverCoord && hovered && tooltipBox && (
           <g pointerEvents="none">
-            <line x1={hoverCoord[0]} x2={hoverCoord[0]} y1={PAD_Y} y2={HEIGHT - PAD_Y} stroke="var(--border-strong)" strokeWidth={1} />
-            <circle cx={hoverCoord[0]} cy={hoverCoord[1]} r={4} fill={color} stroke="var(--surface)" strokeWidth={2} />
-            <rect x={tooltipBox.x} y={tooltipBox.y} width={tooltipBox.w} height={tooltipBox.h} rx={6} fill="var(--bg)" stroke="var(--border-strong)" strokeWidth={1} />
-            <text x={tooltipBox.x + 8} y={tooltipBox.y + 15} fontSize="9" fill="var(--text-secondary)">
+            <line x1={hoverCoord[0]} x2={hoverCoord[0]} y1={PAD_Y} y2={HEIGHT - PAD_Y} stroke="var(--input)" strokeWidth={1} />
+            <circle cx={hoverCoord[0]} cy={hoverCoord[1]} r={4} fill={color} stroke="var(--card)" strokeWidth={2} />
+            <rect x={tooltipBox.x} y={tooltipBox.y} width={tooltipBox.w} height={tooltipBox.h} rx={6} fill="var(--popover)" stroke="var(--input)" strokeWidth={1} />
+            <text x={tooltipBox.x + 8} y={tooltipBox.y + 15} fontSize="9" fill="var(--muted-foreground)">
               {hovered.date}
             </text>
-            <text x={tooltipBox.x + 8} y={tooltipBox.y + 28} fontSize="12" fontWeight={700} fill="var(--text-primary)">
+            <text x={tooltipBox.x + 8} y={tooltipBox.y + 28} fontSize="12" fontWeight={700} fill="var(--foreground)">
               ${hovered.close.toFixed(2)}
             </text>
           </g>
         )}
       </svg>
 
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "0.35rem" }}>
+      <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
         <span>{data.points[0].date}</span>
         <span>{data.points[data.points.length - 1].date}</span>
       </div>
-    </div>
+    </Card>
   );
 }

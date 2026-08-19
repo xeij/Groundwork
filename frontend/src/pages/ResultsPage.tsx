@@ -11,8 +11,8 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { Header } from "../components/Header";
 
 const BACK_LINK = (
-  <Link to="/" className="link-muted" style={{ fontSize: "0.85rem", display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-    &#8592; Analyze another document
+  <Link to="/" className="text-sm text-muted-foreground no-underline hover:text-foreground">
+    Analyze another document
   </Link>
 );
 
@@ -26,10 +26,10 @@ export function ResultsPage() {
 
   if (isLoading) {
     return (
-      <div style={{ minHeight: "100vh" }}>
+      <div className="min-h-screen">
         <Header />
-        <div style={{ textAlign: "center", padding: "5rem 1rem", color: "var(--text-secondary)" }}>
-          <div className="spinner-ring" style={{ width: 26, height: 26, margin: "0 auto 1rem" }} />
+        <div className="px-4 py-20 text-center text-muted-foreground">
+          <div className="spinner-ring mx-auto mb-4 h-6 w-6" />
           Loading summary...
         </div>
       </div>
@@ -42,11 +42,11 @@ export function ResultsPage() {
         ? "This summary has expired or doesn't exist. Summaries are kept for 90 days."
         : "Failed to load summary. Please try again.";
     return (
-      <div style={{ minHeight: "100vh" }}>
+      <div className="min-h-screen">
         <Header />
-        <div style={{ maxWidth: 560, margin: "0 auto", padding: "2.5rem 1.25rem" }}>
+        <div className="mx-auto max-w-xl px-5 py-10">
           <ErrorBanner message={msg} />
-          <Link to="/" className="link-muted" style={{ display: "block", marginTop: "1rem" }}>
+          <Link to="/" className="mt-4 block text-sm text-muted-foreground no-underline hover:text-foreground">
             Analyze another document
           </Link>
         </div>
@@ -59,19 +59,10 @@ export function ResultsPage() {
   const isFiling = data.documentType === "filing";
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div className="min-h-screen">
       <Header right={BACK_LINK} />
-      <div style={{ maxWidth: 660, margin: "0 auto", padding: "2.5rem 1.25rem 3.5rem" }}>
-        <h1
-          style={{
-            fontFamily: "var(--font-serif)",
-            fontSize: "1.6rem",
-            fontWeight: 500,
-            margin: "0 0 1.75rem",
-            color: "var(--text-primary)",
-            letterSpacing: "-0.01em",
-          }}
-        >
+      <div className="mx-auto max-w-2xl px-5 py-10 pb-14">
+        <h1 className="mb-7 text-2xl font-semibold tracking-tight text-foreground">
           {isFiling ? "Filing Summary" : "Lease Summary"}
         </h1>
 
@@ -79,7 +70,7 @@ export function ResultsPage() {
           <>
             <FilingSummaryIntro summary={data.summary} />
             {data.summary.keyMetrics?.tickerSymbol && <StockChart ticker={data.summary.keyMetrics.tickerSymbol} />}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "2rem" }}>
+            <div className="mb-8 flex flex-col gap-3">
               {data.summary.categories.map((cat) => (
                 <FinancialCategoryCard key={cat.name} category={cat} />
               ))}
@@ -88,7 +79,7 @@ export function ResultsPage() {
         ) : (
           <>
             <SummaryIntro summary={data.summary} />
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "2rem" }}>
+            <div className="mb-8 flex flex-col gap-3">
               {data.summary.categories.map((cat) => (
                 <CategoryCard key={cat.name} category={cat} />
               ))}
@@ -96,7 +87,7 @@ export function ResultsPage() {
           </>
         )}
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", paddingTop: "1.25rem", borderTop: "1px solid var(--border)" }}>
+        <div className="flex flex-wrap gap-3 border-t border-border pt-5">
           <ShareButton />
         </div>
       </div>

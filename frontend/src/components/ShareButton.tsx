@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "./ui/button";
 
 export function ShareButton() {
   const [copied, setCopied] = useState(false);
@@ -10,21 +11,8 @@ export function ShareButton() {
   }
 
   return (
-    <button
-      onClick={copy}
-      className={copied ? "btn" : "btn btn-primary"}
-      style={
-        copied
-          ? {
-              background: "var(--green-wash)",
-              color: "var(--green)",
-              borderColor: "var(--green-border)",
-              padding: "0.6rem 1.25rem",
-            }
-          : { padding: "0.6rem 1.25rem" }
-      }
-    >
-      {copied ? "Link copied!" : "Copy shareable link"}
-    </button>
+    <Button onClick={copy} variant={copied ? "secondary" : "default"}>
+      {copied ? "Link copied" : "Copy shareable link"}
+    </Button>
   );
 }

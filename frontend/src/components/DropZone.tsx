@@ -1,5 +1,8 @@
 import { useRef, useState } from "react";
 import type { DragEvent, ChangeEvent } from "react";
+import { cn } from "@/lib/utils";
+import { Card } from "./ui/card";
+import { Button } from "./ui/button";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -11,23 +14,6 @@ interface Props {
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function PdfIcon() {
-  return (
-    <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
-      <path
-        d="M8 2h13l6 6v22a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"
-        fill="var(--surface-raised)"
-        stroke="var(--border-strong)"
-        strokeWidth="1.2"
-      />
-      <path d="M21 2v6h6" fill="none" stroke="var(--border-strong)" strokeWidth="1.2" strokeLinejoin="round" />
-      <text x="17" y="24" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="var(--accent)" fontFamily="var(--font-sans)">
-        PDF
-      </text>
-    </svg>
-  );
 }
 
 export function DropZone({ onFile, captionLabel = "Lease documents only" }: Props) {
@@ -77,54 +63,21 @@ export function DropZone({ onFile, captionLabel = "Lease documents only" }: Prop
 
   if (selected) {
     return (
-      <div className="card file-chip" style={{ padding: "1rem 1.1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.9rem" }}>
-          <PdfIcon />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{
-                color: "var(--text-primary)",
-                fontWeight: 600,
-                fontSize: "0.92rem",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-              title={selected.name}
-            >
+      <Card className="p-4">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-foreground" title={selected.name}>
               {selected.name}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.2rem" }}>
-              <svg width="13" height="13" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="9" fill="var(--green-wash)" />
-                <path d="M6 10.2l2.6 2.6L14.5 7" stroke="var(--green)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
-              <span style={{ color: "var(--text-secondary)", fontSize: "0.78rem" }}>
-                Ready to analyze &middot; {formatSize(selected.size)}
-              </span>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              Ready to analyze &middot; {formatSize(selected.size)}
             </div>
           </div>
-          <button
-            onClick={clearFile}
-            aria-label="Remove file"
-            className="btn-ghost"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: "var(--radius-sm)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              padding: 0,
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </button>
+          <Button variant="outline" size="sm" onClick={clearFile} aria-label="Remove file">
+            Remove
+          </Button>
         </div>
-      </div>
+      </Card>
     );
   }
 
@@ -137,38 +90,20 @@ export function DropZone({ onFile, captionLabel = "Lease documents only" }: Prop
       }}
       onDragLeave={() => setDragging(false)}
       onClick={() => inputRef.current?.click()}
-      className={`dropzone${dragging ? " dragging" : ""}`}
-      style={{ padding: "2.5rem 2rem", textAlign: "center", cursor: "pointer" }}
+      className={cn(
+        "cursor-pointer rounded-lg border-2 border-dashed border-input bg-card px-8 py-10 text-center transition-colors hover:border-muted-foreground",
+        dragging && "border-foreground bg-secondary",
+      )}
     >
-      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style={{ marginBottom: "0.85rem" }} aria-hidden="true">
-        <path
-          d="M12 15V4M12 4L8 8M12 4l4 4"
-          stroke="var(--text-tertiary)"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"
-          stroke="var(--text-tertiary)"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <p style={{ margin: "0 0 0.35rem", color: "var(--text-primary)", fontWeight: 500, fontSize: "0.95rem" }}>
-        Drag &amp; drop your PDF here, or click to select
-      </p>
-      <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-        {captionLabel} &middot; max size 20 megabytes
-      </p>
-      {error && <p style={{ color: "var(--red)", margin: "0.85rem 0 0", fontSize: "0.85rem" }}>{error}</p>}
+      <p className="mb-1 text-sm font-medium text-foreground">Drag &amp; drop your PDF here, or click to select</p>
+      <p className="text-sm text-muted-foreground">{captionLabel} &middot; max size 20 megabytes</p>
+      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       <input
         ref={inputRef}
         data-testid="file-input"
         type="file"
         accept="application/pdf"
-        style={{ display: "none" }}
+        className="hidden"
         onChange={onChange}
       />
     </div>

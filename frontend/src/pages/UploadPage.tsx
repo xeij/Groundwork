@@ -4,6 +4,8 @@ import { DropZone } from "../components/DropZone";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Header } from "../components/Header";
+import { Button } from "../components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { useDocumentAnalysis } from "../hooks/useDocumentAnalysis";
 import type { DocumentType } from "../types";
 
@@ -41,79 +43,34 @@ export function UploadPage() {
   const copy = COPY[documentType];
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div className="min-h-screen">
       <Header />
-      <div style={{ maxWidth: 560, margin: "0 auto", padding: "3.5rem 1.25rem 3rem" }}>
-        <div style={{ marginBottom: "2.5rem" }}>
-          <p
-            style={{
-              margin: "0 0 0.6rem",
-              color: "var(--accent)",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              letterSpacing: "0.09em",
-              textTransform: "uppercase",
-            }}
-          >
+      <div className="mx-auto max-w-xl px-5 py-14">
+        <div className="mb-10">
+          <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             Document intelligence
           </p>
-          <h1
-            style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "2rem",
-              fontWeight: 500,
-              margin: "0 0 0.75rem",
-              color: "var(--text-primary)",
-              lineHeight: 1.2,
-              letterSpacing: "-0.01em",
-            }}
-          >
+          <h1 className="mb-3 text-3xl font-semibold tracking-tight text-foreground">
             Know what's actually in the document.
           </h1>
-          <p style={{ color: "var(--text-secondary)", margin: 0, lineHeight: 1.65, fontSize: "0.96rem" }}>
-            {copy.subheading}
-          </p>
+          <p className="text-sm leading-relaxed text-muted-foreground">{copy.subheading}</p>
         </div>
 
         {!isRunning && (
-          <div
-            role="group"
-            aria-label="Document type"
-            style={{
-              display: "flex",
-              gap: "0.25rem",
-              marginBottom: "1.5rem",
-              padding: "0.25rem",
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-            }}
+          <Tabs
+            value={documentType}
+            onValueChange={(v) => setDocumentType(v as DocumentType)}
+            className="mb-6"
           >
-            {(["lease", "filing"] as DocumentType[]).map((type) => (
-              <button
-                key={type}
-                onClick={() => setDocumentType(type)}
-                style={{
-                  flex: 1,
-                  padding: "0.55rem",
-                  background: documentType === type ? "var(--surface-raised)" : "transparent",
-                  color: documentType === type ? "var(--text-primary)" : "var(--text-secondary)",
-                  border: documentType === type ? "1px solid var(--border-strong)" : "1px solid transparent",
-                  borderRadius: "calc(var(--radius) - 4px)",
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
-              >
-                {type === "lease" ? "Lease" : "10-K Filing"}
-              </button>
-            ))}
-          </div>
+            <TabsList aria-label="Document type" className="w-full">
+              <TabsTrigger value="lease">Lease</TabsTrigger>
+              <TabsTrigger value="filing">10-K Filing</TabsTrigger>
+            </TabsList>
+          </Tabs>
         )}
 
         {errorMessage && (
-          <div style={{ marginBottom: "1rem" }}>
+          <div className="mb-4">
             <ErrorBanner message={errorMessage} onDismiss={reset} />
           </div>
         )}
@@ -121,14 +78,9 @@ export function UploadPage() {
         {!isRunning && (
           <>
             <DropZone onFile={setFile} captionLabel={copy.caption} />
-            <button
-              onClick={() => file && run(file, documentType)}
-              disabled={!file}
-              className="btn btn-primary"
-              style={{ marginTop: "1rem", width: "100%", padding: "0.85rem" }}
-            >
+            <Button onClick={() => file && run(file, documentType)} disabled={!file} className="mt-4 w-full" size="lg">
               {copy.button}
-            </button>
+            </Button>
           </>
         )}
 
