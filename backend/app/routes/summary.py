@@ -16,7 +16,7 @@ def get(summary_id: str):
     status = item.get("status", "done")
 
     if status == "pending":
-        return JSONResponse(status_code=202, content={"status": "pending"})
+        return JSONResponse(status_code=202, content={"status": "pending", "step": item.get("step")})
 
     if status == "failed":
         raise HTTPException(status_code=422, detail="Analysis failed. Please try uploading again.")

@@ -122,3 +122,12 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+// Real backend processing steps for a document that's still being analyzed, in order.
+export type AnalysisStep = "extracting_text" | "analyzing" | "finalizing";
+
+export class PendingError extends Error {
+  constructor(public step: AnalysisStep | null) {
+    super("pending");
+  }
+}

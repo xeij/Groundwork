@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 import { UploadPage } from "../pages/UploadPage";
 import * as apiClient from "../api/client";
+import { PendingError } from "../types";
 
 vi.mock("../api/client");
 
@@ -44,8 +45,32 @@ test("shows uploading state when analysis starts", async () => {
   renderPage();
   await userEvent.upload(screen.getByTestId("file-input"), PDF_FILE);
   await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
-  expect(await screen.findByText(/reading through/i)).toBeInTheDocument();
+  expect(await screen.findByText(/reading the document/i)).toBeInTheDocument();
 });
+
+test(
+  "checklist adds a step with a checkmark as the backend reports progress, without repeating",
+  async () => {
+    vi.mocked(apiClient.getUploadUrl).mockResolvedValue({
+      presignedUrl: "http://s3.example.com/upload",
+      s3Key: "leases/x.pdf",
+    });
+    vi.mocked(apiClient.uploadPdfToS3).mockResolvedValue(undefined);
+    vi.mocked(apiClient.analyzeLease).mockResolvedValue({ summaryId: "abc12345" });
+    vi.mocked(apiClient.getSummary)
+      .mockRejectedValueOnce(new PendingError("extracting_text"))
+      .mockRejectedValueOnce(new PendingError("analyzing"));
+
+    renderPage();
+    await userEvent.upload(screen.getByTestId("file-input"), PDF_FILE);
+    await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+
+    expect(await screen.findByText(/analyzing with ai/i, {}, { timeout: 8000 })).toBeInTheDocument();
+    expect(screen.getAllByText(/reading the document/i)).toHaveLength(1);
+    expect(screen.getAllByText(/uploading your lease/i)).toHaveLength(1);
+  },
+  10000,
+);
 
 test("selecting 10-K Filing switches subheading and caption copy", async () => {
   renderPage();

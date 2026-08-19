@@ -31,6 +31,14 @@ def save_pending(summary_id: str, s3_key: str, document_type: str = "lease") -> 
     )
 
 
+def update_progress(summary_id: str, step: str) -> None:
+    _table().update_item(
+        Key={"summaryId": summary_id},
+        UpdateExpression="SET step = :step",
+        ExpressionAttributeValues={":step": step},
+    )
+
+
 def update_summary(summary_id: str, summary: dict) -> None:
     _table().update_item(
         Key={"summaryId": summary_id},

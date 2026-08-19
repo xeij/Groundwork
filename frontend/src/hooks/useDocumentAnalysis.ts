@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { getUploadUrl, uploadPdfToS3, analyzeLease, getSummary } from "../api/client";
-import { ApiError } from "../types";
-import type { DocumentType } from "../types";
+import { PendingError, ApiError } from "../types";
+import type { DocumentType, AnalysisStep } from "../types";
 
 export type AnalysisPhase = "idle" | "uploading" | "analyzing" | "done" | "error";
 
 export interface UseDocumentAnalysisResult {
   phase: AnalysisPhase;
+  step: AnalysisStep | null;
   summaryId: string | null;
   errorMessage: string | null;
   run: (file: File, documentType?: DocumentType) => Promise<void>;
@@ -23,11 +24,13 @@ const POLL_CONFIG: Record<DocumentType, { intervalMs: number; maxPolls: number }
 
 export function useDocumentAnalysis(): UseDocumentAnalysisResult {
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
+  const [step, setStep] = useState<AnalysisStep | null>(null);
   const [summaryId, setSummaryId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function run(file: File, documentType: DocumentType = "lease") {
     setPhase("uploading");
+    setStep(null);
     setErrorMessage(null);
     try {
       const { presignedUrl, s3Key } = await getUploadUrl(documentType);
@@ -45,7 +48,10 @@ export function useDocumentAnalysis(): UseDocumentAnalysisResult {
           setPhase("done");
           return;
         } catch (err) {
-          if (err instanceof ApiError && err.status === 202) continue;
+          if (err instanceof PendingError) {
+            if (err.step) setStep(err.step);
+            continue;
+          }
           throw err;
         }
       }
@@ -61,9 +67,10 @@ export function useDocumentAnalysis(): UseDocumentAnalysisResult {
 
   function reset() {
     setPhase("idle");
+    setStep(null);
     setSummaryId(null);
     setErrorMessage(null);
   }
 
-  return { phase, summaryId, errorMessage, run, reset };
+  return { phase, step, summaryId, errorMessage, run, reset };
 }

@@ -116,6 +116,18 @@ def test_get_summary_returns_202_when_pending(dynamodb_table):
     response = client.get("/summary/test1234")
     assert response.status_code == 202
     assert response.json()["status"] == "pending"
+    assert response.json()["step"] is None
+
+
+@mock_aws
+def test_get_summary_returns_202_with_current_step(dynamodb_table):
+    from app.services.summary_store import save_pending, update_progress
+    save_pending("test5678", VALID_S3_KEY)
+    update_progress("test5678", "analyzing")
+
+    response = client.get("/summary/test5678")
+    assert response.status_code == 202
+    assert response.json()["step"] == "analyzing"
 
 
 @mock_aws

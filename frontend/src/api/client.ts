@@ -1,5 +1,12 @@
-import type { UploadUrlResponse, AnalyzeResponse, SummaryRecord, DocumentType, StockChartData } from "../types";
-import { ApiError } from "../types";
+import type {
+  UploadUrlResponse,
+  AnalyzeResponse,
+  SummaryRecord,
+  DocumentType,
+  StockChartData,
+  AnalysisStep,
+} from "../types";
+import { ApiError, PendingError } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
@@ -36,7 +43,10 @@ export async function analyzeLease(s3Key: string): Promise<AnalyzeResponse> {
 
 export async function getSummary(summaryId: string): Promise<SummaryRecord> {
   const res = await fetch(`${API_URL}/summary/${summaryId}`);
-  if (res.status === 202) throw new ApiError(202, "pending");
+  if (res.status === 202) {
+    const body = await res.json().catch(() => ({}));
+    throw new PendingError((body as { step?: AnalysisStep | null }).step ?? null);
+  }
   return handleResponse<SummaryRecord>(res);
 }
 

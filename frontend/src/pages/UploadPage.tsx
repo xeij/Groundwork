@@ -27,7 +27,7 @@ const COPY: Record<DocumentType, { subheading: string; caption: string; button: 
 
 export function UploadPage() {
   const navigate = useNavigate();
-  const { phase, summaryId, errorMessage, run, reset } = useDocumentAnalysis();
+  const { phase, step, summaryId, errorMessage, run, reset } = useDocumentAnalysis();
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<DocumentType>("lease");
 
@@ -132,7 +132,7 @@ export function UploadPage() {
           </>
         )}
 
-        <ProgressIndicator phase={phase} documentType={documentType} />
+        <ProgressIndicator phase={phase} step={step} documentType={documentType} />
       </div>
     </div>
   );
