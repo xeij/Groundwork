@@ -1,29 +1,29 @@
 import type { Severity } from "../types";
 
-const CONFIG: Record<Severity, { label: string; bg: string; color: string; dot: string }> = {
-  red:    { label: "Watch out",    bg: "rgba(248,81,73,0.15)",   color: "#f85149", dot: "#f85149" },
-  yellow: { label: "Worth asking", bg: "rgba(210,153,34,0.15)",  color: "#d29922", dot: "#d29922" },
-  green:  { label: "All clear",    bg: "rgba(63,185,80,0.15)",   color: "#3fb950", dot: "#3fb950" },
+const CONFIG: Record<Severity, { label: string; bg: string; color: string; border: string }> = {
+  red: { label: "Watch out", bg: "var(--red-wash)", color: "var(--red)", border: "var(--red-border)" },
+  yellow: { label: "Worth asking", bg: "var(--amber-wash)", color: "var(--amber)", border: "var(--amber-border)" },
+  green: { label: "All clear", bg: "var(--green-wash)", color: "var(--green)", border: "var(--green-border)" },
 };
 
 export function SeverityBadge({ severity }: { severity: Severity }) {
-  const { label, bg, color, dot } = CONFIG[severity];
+  const { label, bg, color, border } = CONFIG[severity];
   return (
     <span
       style={{
         background: bg,
         color,
+        border: `1px solid ${border}`,
         borderRadius: 999,
-        padding: "3px 10px 3px 8px",
-        fontSize: "0.78rem",
+        padding: "3px 10px",
+        fontSize: "0.75rem",
         fontWeight: 600,
         display: "inline-flex",
         alignItems: "center",
-        gap: "5px",
         letterSpacing: "0.01em",
+        whiteSpace: "nowrap",
       }}
     >
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, display: "inline-block", flexShrink: 0 }} />
       {label}
     </span>
   );

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { DropZone } from "../components/DropZone";
 import { ProgressIndicator } from "../components/ProgressIndicator";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { Header } from "../components/Header";
 import { useDocumentAnalysis } from "../hooks/useDocumentAnalysis";
 import type { DocumentType } from "../types";
 
@@ -40,78 +41,99 @@ export function UploadPage() {
   const copy = COPY[documentType];
 
   return (
-    <div
-      style={{
-        maxWidth: 560,
-        margin: "0 auto",
-        padding: "3rem 1.25rem 2rem",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-      }}
-    >
-      <div style={{ marginBottom: "2.5rem" }}>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: "0 0 0.4rem", color: "#e6edf3" }}>
-          Groundwork
-        </h1>
-        <p style={{ color: "#8b949e", margin: 0, lineHeight: 1.6 }}>{copy.subheading}</p>
-      </div>
-
-      {!isRunning && (
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.25rem" }}>
-          {(["lease", "filing"] as DocumentType[]).map((type) => (
-            <button
-              key={type}
-              onClick={() => setDocumentType(type)}
-              style={{
-                flex: 1,
-                padding: "0.6rem",
-                background: documentType === type ? "#1f6feb" : "#161b22",
-                color: documentType === type ? "#e6edf3" : "#8b949e",
-                border: `1px solid ${documentType === type ? "#388bfd40" : "#30363d"}`,
-                borderRadius: 8,
-                fontWeight: 600,
-                fontSize: "0.875rem",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
-            >
-              {type === "lease" ? "Lease" : "10-K Filing"}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {errorMessage && (
-        <div style={{ marginBottom: "1rem" }}>
-          <ErrorBanner message={errorMessage} onDismiss={reset} />
-        </div>
-      )}
-
-      {!isRunning && (
-        <>
-          <DropZone onFile={setFile} captionLabel={copy.caption} />
-          <button
-            onClick={() => file && run(file, documentType)}
-            disabled={!file}
+    <div style={{ minHeight: "100vh" }}>
+      <Header />
+      <div style={{ maxWidth: 560, margin: "0 auto", padding: "3.5rem 1.25rem 3rem" }}>
+        <div style={{ marginBottom: "2.5rem" }}>
+          <p
             style={{
-              marginTop: "1rem",
-              width: "100%",
-              padding: "0.8rem",
-              background: file ? "#1f6feb" : "#21262d",
-              color: file ? "#e6edf3" : "#484f58",
-              border: `1px solid ${file ? "#388bfd40" : "#30363d"}`,
-              borderRadius: 8,
+              margin: "0 0 0.6rem",
+              color: "var(--accent)",
+              fontSize: "0.78rem",
               fontWeight: 600,
-              fontSize: "1rem",
-              cursor: file ? "pointer" : "not-allowed",
-              transition: "all 0.15s",
+              letterSpacing: "0.09em",
+              textTransform: "uppercase",
             }}
           >
-            {copy.button}
-          </button>
-        </>
-      )}
+            Document intelligence
+          </p>
+          <h1
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "2rem",
+              fontWeight: 500,
+              margin: "0 0 0.75rem",
+              color: "var(--text-primary)",
+              lineHeight: 1.2,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Know what's actually in the document.
+          </h1>
+          <p style={{ color: "var(--text-secondary)", margin: 0, lineHeight: 1.65, fontSize: "0.96rem" }}>
+            {copy.subheading}
+          </p>
+        </div>
 
-      <ProgressIndicator phase={phase} documentType={documentType} />
+        {!isRunning && (
+          <div
+            role="group"
+            aria-label="Document type"
+            style={{
+              display: "flex",
+              gap: "0.25rem",
+              marginBottom: "1.5rem",
+              padding: "0.25rem",
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+            }}
+          >
+            {(["lease", "filing"] as DocumentType[]).map((type) => (
+              <button
+                key={type}
+                onClick={() => setDocumentType(type)}
+                style={{
+                  flex: 1,
+                  padding: "0.55rem",
+                  background: documentType === type ? "var(--surface-raised)" : "transparent",
+                  color: documentType === type ? "var(--text-primary)" : "var(--text-secondary)",
+                  border: documentType === type ? "1px solid var(--border-strong)" : "1px solid transparent",
+                  borderRadius: "calc(var(--radius) - 4px)",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {type === "lease" ? "Lease" : "10-K Filing"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div style={{ marginBottom: "1rem" }}>
+            <ErrorBanner message={errorMessage} onDismiss={reset} />
+          </div>
+        )}
+
+        {!isRunning && (
+          <>
+            <DropZone onFile={setFile} captionLabel={copy.caption} />
+            <button
+              onClick={() => file && run(file, documentType)}
+              disabled={!file}
+              className="btn btn-primary"
+              style={{ marginTop: "1rem", width: "100%", padding: "0.85rem" }}
+            >
+              {copy.button}
+            </button>
+          </>
+        )}
+
+        <ProgressIndicator phase={phase} documentType={documentType} />
+      </div>
     </div>
   );
 }

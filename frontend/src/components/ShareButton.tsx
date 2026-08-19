@@ -12,17 +12,17 @@ export function ShareButton() {
   return (
     <button
       onClick={copy}
-      style={{
-        background: copied ? "rgba(63,185,80,0.15)" : "#1f6feb",
-        color: copied ? "#3fb950" : "#e6edf3",
-        border: copied ? "1px solid rgba(63,185,80,0.4)" : "1px solid #388bfd40",
-        borderRadius: 6,
-        padding: "0.6rem 1.25rem",
-        cursor: "pointer",
-        fontWeight: 600,
-        fontSize: "0.9rem",
-        transition: "all 0.15s",
-      }}
+      className={copied ? "btn" : "btn btn-primary"}
+      style={
+        copied
+          ? {
+              background: "var(--green-wash)",
+              color: "var(--green)",
+              borderColor: "var(--green-border)",
+              padding: "0.6rem 1.25rem",
+            }
+          : { padding: "0.6rem 1.25rem" }
+      }
     >
       {copied ? "Link copied!" : "Copy shareable link"}
     </button>

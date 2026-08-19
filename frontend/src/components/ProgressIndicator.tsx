@@ -70,22 +70,11 @@ export function ProgressIndicator({ phase, documentType = "lease" }: Props) {
   if (!messages) return null;
 
   return (
-    <div style={{ textAlign: "center", padding: "2rem 1rem", color: "#8b949e" }}>
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          border: "3px solid #21262d",
-          borderTopColor: "#58a6ff",
-          borderRadius: "50%",
-          animation: "spin 0.8s linear infinite",
-          margin: "0 auto 1rem",
-        }}
-      />
-      <p style={{ minHeight: "1.5em", margin: 0, color: "#e6edf3" }}>
+    <div style={{ textAlign: "center", padding: "2.5rem 1rem 1rem" }}>
+      <div className="spinner-ring" style={{ width: 30, height: 30, margin: "0 auto 1.1rem" }} />
+      <p key={index} className="fade-msg" style={{ minHeight: "1.5em", margin: 0, color: "var(--text-primary)", fontSize: "0.92rem" }}>
         {messages[index]}
       </p>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

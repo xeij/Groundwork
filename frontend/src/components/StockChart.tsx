@@ -9,9 +9,9 @@ const PAD_X = 8;
 const PAD_Y = 14;
 
 const CARD_STYLE: CSSProperties = {
-  border: "1px solid #21262d",
-  borderRadius: 10,
-  background: "#161b22",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
+  background: "var(--surface)",
   padding: "1rem 1.25rem",
   marginBottom: "0.75rem",
 };
@@ -27,7 +27,7 @@ export function StockChart({ ticker }: { ticker: string }) {
 
   if (isLoading) {
     return (
-      <div style={{ ...CARD_STYLE, color: "#8b949e", fontSize: "0.85rem", textAlign: "center" }}>
+      <div style={{ ...CARD_STYLE, color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center" }}>
         Loading price chart...
       </div>
     );
@@ -35,7 +35,7 @@ export function StockChart({ ticker }: { ticker: string }) {
 
   if (isError || !data || data.points.length < 2) {
     return (
-      <div style={{ ...CARD_STYLE, color: "#8b949e", fontSize: "0.85rem", textAlign: "center" }}>
+      <div style={{ ...CARD_STYLE, color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center" }}>
         Price chart unavailable for {ticker}.
       </div>
     );
@@ -53,7 +53,7 @@ export function StockChart({ ticker }: { ticker: string }) {
   const areaPath = `${linePath} L${coords[coords.length - 1][0].toFixed(2)},${HEIGHT - PAD_Y} L${coords[0][0].toFixed(2)},${HEIGHT - PAD_Y} Z`;
 
   const isUp = data.changePercent >= 0;
-  const color = isUp ? "#3fb950" : "#f85149";
+  const color = isUp ? "var(--green)" : "var(--red)";
 
   function handleMouseMove(e: MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current;
@@ -83,7 +83,7 @@ export function StockChart({ ticker }: { ticker: string }) {
   return (
     <div style={CARD_STYLE}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.5rem" }}>
-        <span style={{ fontSize: "0.95rem", fontWeight: 600, color: "#e6edf3" }}>{data.ticker} &middot; YTD</span>
+        <span style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>{data.ticker} &middot; YTD</span>
         <span style={{ fontSize: "0.9rem", fontWeight: 600, color }}>
           {isUp ? "+" : ""}
           {data.changePercent.toFixed(2)}%
@@ -105,20 +105,20 @@ export function StockChart({ ticker }: { ticker: string }) {
         <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {hoverCoord && hovered && tooltipBox && (
           <g pointerEvents="none">
-            <line x1={hoverCoord[0]} x2={hoverCoord[0]} y1={PAD_Y} y2={HEIGHT - PAD_Y} stroke="#30363d" strokeWidth={1} />
-            <circle cx={hoverCoord[0]} cy={hoverCoord[1]} r={4} fill={color} stroke="#161b22" strokeWidth={2} />
-            <rect x={tooltipBox.x} y={tooltipBox.y} width={tooltipBox.w} height={tooltipBox.h} rx={6} fill="#0d1117" stroke="#30363d" strokeWidth={1} />
-            <text x={tooltipBox.x + 8} y={tooltipBox.y + 15} fontSize="9" fill="#8b949e">
+            <line x1={hoverCoord[0]} x2={hoverCoord[0]} y1={PAD_Y} y2={HEIGHT - PAD_Y} stroke="var(--border-strong)" strokeWidth={1} />
+            <circle cx={hoverCoord[0]} cy={hoverCoord[1]} r={4} fill={color} stroke="var(--surface)" strokeWidth={2} />
+            <rect x={tooltipBox.x} y={tooltipBox.y} width={tooltipBox.w} height={tooltipBox.h} rx={6} fill="var(--bg)" stroke="var(--border-strong)" strokeWidth={1} />
+            <text x={tooltipBox.x + 8} y={tooltipBox.y + 15} fontSize="9" fill="var(--text-secondary)">
               {hovered.date}
             </text>
-            <text x={tooltipBox.x + 8} y={tooltipBox.y + 28} fontSize="12" fontWeight={700} fill="#e6edf3">
+            <text x={tooltipBox.x + 8} y={tooltipBox.y + 28} fontSize="12" fontWeight={700} fill="var(--text-primary)">
               ${hovered.close.toFixed(2)}
             </text>
           </g>
         )}
       </svg>
 
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#8b949e", marginTop: "0.35rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-secondary)", marginTop: "0.35rem" }}>
         <span>{data.points[0].date}</span>
         <span>{data.points[data.points.length - 1].date}</span>
       </div>
