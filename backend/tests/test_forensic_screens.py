@@ -5,15 +5,21 @@ a magic number, so a reviewer can check the formula against the published model 
 running anything.
 """
 
+import math
+
 import pytest
 
+from app.services import forensic_screens
 from app.services.forensic_screens import (
     accrual_ratio,
     altman_z_score,
+    benford_digit_test,
     beneish_m_score,
     divergence_flags,
+    montier_c_score,
     piotroski_f_score,
     run_all_screens,
+    zmijewski_score,
 )
 
 # Round numbers chosen so every index below divides out cleanly by hand.
@@ -307,7 +313,7 @@ def test_divergence_flags_need_two_years():
 def test_run_all_screens_collects_screens_and_flags():
     result = run_all_screens(HISTORY)
     assert {screen["key"] for screen in result["screens"]} == {
-        "beneish_m", "altman_z", "piotroski_f", "accrual_ratio",
+        "beneish_m", "altman_z", "zmijewski", "piotroski_f", "montier_c", "accrual_ratio",
     }
     assert result["flags"]
 
@@ -331,3 +337,230 @@ def test_every_screen_carries_the_fields_the_frontend_renders():
         }
         assert screen["severity"] in ("red", "yellow", "green")
         assert screen["interpretation"].strip()
+
+
+# --- Zmijewski ------------------------------------------------------------------------
+
+
+def test_zmijewski_follows_the_published_coefficients():
+    # ROA 140/1200 = 0.11667, leverage 600/1200 = 0.5, liquidity 600/250 = 2.4
+    # -4.336 - 4.513(0.11667) + 5.679(0.5) - 0.004(2.4) = -2.0326
+    screen = zmijewski_score(HISTORY)
+    assert screen["value"] == pytest.approx(-2.03, abs=0.01)
+    assert screen["components"]["returnOnAssets"] == pytest.approx(0.1167, abs=0.0001)
+    assert screen["severity"] == "green"
+
+
+def test_zmijewski_reports_a_probability_alongside_the_score():
+    screen = zmijewski_score(HISTORY)
+    # 1/(1+e^2.0326) = 0.116
+    assert screen["components"]["probabilityOfDistress"] == pytest.approx(0.116, abs=0.005)
+
+
+def test_a_loss_making_over_levered_filer_scores_as_distressed():
+    distressed = {
+        **LATEST,
+        "netIncome": -300.0,
+        "totalLiabilities": 1150.0,
+        "currentAssets": 100.0,
+        "currentLiabilities": 500.0,
+    }
+    screen = zmijewski_score([PRIOR, distressed])
+    assert screen["severity"] == "red"
+    assert screen["value"] > 0
+    assert "above the 50% line" in screen["interpretation"]
+
+
+def test_zmijewski_needs_no_prior_year():
+    assert zmijewski_score([LATEST]) is not None
+
+
+def test_zmijewski_is_omitted_when_liabilities_are_untagged():
+    assert zmijewski_score([_without(LATEST, "totalLiabilities")]) is None
+
+
+# --- Montier C-score ------------------------------------------------------------------
+
+
+def test_c_score_counts_the_traits_that_fired():
+    screen = montier_c_score(HISTORY)
+    traits = screen["components"]
+
+    # Profit ran further ahead of cash: (140-120)=20 against (100-150)=-50 last year.
+    assert traits["earningsOutrunningCash"] == 1.0
+    # Receivables 180/1200 vs 100/1000 -> 54.75 days against 36.5. Fired.
+    assert traits["risingDaysSalesOutstanding"] == 1.0
+    # Assets 1200/1000 = 20% growth, above the 10% line. Fired.
+    assert traits["assetsGrowingFast"] == 1.0
+    assert screen["value"] == sum(traits.values())
+
+
+def test_c_score_severity_tracks_how_many_traits_fired():
+    aggressive = {
+        **LATEST,
+        "netIncome": 300.0,        # profit far outruns cash
+        "operatingCashFlow": 100.0,
+        "inventory": 200.0,        # slower inventory turns
+        "cash": 60.0,              # a bigger residual "other current assets" bucket
+        "depreciationAmortization": 60.0,  # depreciating more slowly against PP&E
+    }
+    screen = montier_c_score([PRIOR, aggressive])
+
+    assert screen["value"] >= 4
+    assert screen["severity"] == "red"
+
+
+def test_c_score_needs_both_years():
+    assert montier_c_score([LATEST]) is None
+    assert montier_c_score([PRIOR, _without(LATEST, "inventory")]) is None
+
+
+def test_other_current_assets_residual_is_not_allowed_to_go_negative():
+    """A filer whose tagged current-asset lines exceed the subtotal yields no trait."""
+    inconsistent = {**LATEST, "currentAssets": 100.0, "cash": 500.0}
+    assert montier_c_score([PRIOR, inconsistent]) is None
+
+
+# --- Benford --------------------------------------------------------------------------
+
+
+def _facts_from_values(values: list[float]) -> dict:
+    """One synthetic us-gaap concept per value, so nothing is deduplicated away."""
+    return {
+        "facts": {
+            "us-gaap": {
+                f"Concept{i}": {
+                    "units": {"USD": [{"val": value, "start": "2024-01-01", "end": "2024-12-31"}]}
+                }
+                for i, value in enumerate(values)
+            }
+        }
+    }
+
+
+def _benford_conforming(count: int) -> list[float]:
+    """Values whose leading digits follow Benford exactly, by construction."""
+    values = []
+    for digit in range(1, 10):
+        share = math.log10(1 + 1 / digit)
+        for i in range(round(share * count)):
+            values.append(float(f"{digit}{i:04d}"))
+    return values
+
+
+def test_benford_passes_a_conforming_distribution():
+    screen = benford_digit_test(_facts_from_values(_benford_conforming(2000)))
+
+    assert screen["severity"] == "green"
+    assert screen["components"]["digit1Percent"] == pytest.approx(30.1, abs=1.0)
+
+
+def test_benford_flags_a_distribution_that_does_not_conform():
+    screen = benford_digit_test(_facts_from_values([float(f"9{i:04d}") for i in range(500)]))
+
+    assert screen["severity"] == "yellow"
+    assert screen["components"]["digit9Percent"] == 100.0
+    assert "never evidence of manipulation" not in screen["interpretation"]  # that lives in the docs
+
+
+def test_benford_is_never_red_however_badly_it_conforms():
+    """A digit test alone must not present as a finding about the company."""
+    screen = benford_digit_test(_facts_from_values([float(f"9{i:04d}") for i in range(500)]))
+
+    assert screen["severity"] in ("green", "yellow")
+
+
+def test_benford_needs_a_large_enough_sample():
+    assert benford_digit_test(_facts_from_values([float(f"1{i:03d}") for i in range(100)])) is None
+    assert benford_digit_test(None) is None
+    assert benford_digit_test({}) is None
+
+
+def test_benford_counts_a_restated_figure_once():
+    """The same fact is repeated in every later filing; counting each would skew the test."""
+    repeated = {
+        "facts": {
+            "us-gaap": {
+                "Revenues": {
+                    "units": {
+                        "USD": [
+                            {"val": 1000.0, "start": "2024-01-01", "end": "2024-12-31", "accn": "a"},
+                            {"val": 1000.0, "start": "2024-01-01", "end": "2024-12-31", "accn": "b"},
+                        ]
+                    }
+                }
+            }
+        }
+    }
+    assert len(forensic_screens._tagged_dollar_values(repeated)) == 1
+
+
+def test_benford_ignores_non_dollar_and_trivially_small_facts():
+    facts = {
+        "facts": {
+            "us-gaap": {
+                "Shares": {"units": {"shares": [{"val": 5_000_000, "end": "2024-12-31"}]}},
+                "Tiny": {"units": {"USD": [{"val": 4.0, "end": "2024-12-31"}]}},
+                "Real": {"units": {"USD": [{"val": 4_000.0, "end": "2024-12-31"}]}},
+            }
+        }
+    }
+    assert forensic_screens._tagged_dollar_values(facts) == [4_000.0]
+
+
+def test_leading_digit_reads_through_a_decimal_point():
+    assert forensic_screens._leading_digit(0.0034) == 3
+    assert forensic_screens._leading_digit(91_234.5) == 9
+
+
+def test_run_all_screens_includes_the_digit_test_only_when_given_facts():
+    without = {s["key"] for s in run_all_screens(HISTORY)["screens"]}
+    with_facts = {
+        s["key"]
+        for s in run_all_screens(HISTORY, _facts_from_values(_benford_conforming(2000)))["screens"]
+    }
+
+    assert "benford" not in without
+    assert "benford" in with_facts
+
+
+# --- the new divergence flags ---------------------------------------------------------
+
+
+def _flag(flags: list[dict], key: str) -> dict | None:
+    return next((f for f in flags if f["key"] == key), None)
+
+
+def test_falling_deferred_revenue_against_rising_sales_is_flagged():
+    prior = {**PRIOR, "deferredRevenue": 200.0}
+    latest = {**LATEST, "deferredRevenue": 160.0}  # -20% against +20% revenue
+
+    flag = _flag(divergence_flags([prior, latest]), "deferred_revenue_shrinking")
+
+    assert flag["severity"] == "red"
+    assert flag["detail"]["deferredRevenueGrowthPercent"] == -20.0
+
+
+def test_deferred_revenue_growing_alongside_sales_is_not_flagged():
+    prior = {**PRIOR, "deferredRevenue": 200.0}
+    latest = {**LATEST, "deferredRevenue": 240.0}
+
+    assert _flag(divergence_flags([prior, latest]), "deferred_revenue_shrinking") is None
+
+
+def test_a_collapsing_tax_rate_is_flagged_with_its_effect_on_profit():
+    prior = {**PRIOR, "pretaxIncome": 150.0, "incomeTaxExpense": 45.0}   # 30%
+    latest = {**LATEST, "pretaxIncome": 160.0, "incomeTaxExpense": 16.0}  # 10%
+
+    flag = _flag(divergence_flags([prior, latest]), "tax_rate_collapse")
+
+    assert flag["severity"] == "red"
+    assert flag["detail"]["dropPercentagePoints"] == 20.0
+    assert flag["detail"]["profitEffect"] == 32.0  # 160 * 20%
+
+
+def test_a_stable_tax_rate_is_not_flagged():
+    prior = {**PRIOR, "pretaxIncome": 150.0, "incomeTaxExpense": 45.0}
+    latest = {**LATEST, "pretaxIncome": 160.0, "incomeTaxExpense": 46.0}
+
+    assert _flag(divergence_flags([prior, latest]), "tax_rate_collapse") is None

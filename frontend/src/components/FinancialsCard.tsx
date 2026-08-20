@@ -1,6 +1,6 @@
 import type { FiscalYearMetrics, RatioValue } from "../types";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { formatChange, formatMetric, formatUsd } from "@/lib/format";
+import { changeTone, formatChange, formatMetric, formatUsd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // The lines worth showing as a trend. Everything else stays in the ratio grid.
@@ -77,6 +77,14 @@ function HistoryTable({ history }: { history: FiscalYearMetrics[] }) {
   );
 }
 
+// Rising is not the same as improving: receivable days going up is bad news wearing a
+// plus sign. Ratios whose direction is a judgement call are left uncoloured.
+const TONE_CLASS = {
+  good: "text-success",
+  bad: "text-destructive",
+  neutral: "text-muted-foreground",
+} as const;
+
 function RatioGrid({ ratios }: { ratios: Record<string, RatioValue> }) {
   const entries = Object.entries(ratios);
   if (entries.length === 0) return null;
@@ -93,12 +101,7 @@ function RatioGrid({ ratios }: { ratios: Record<string, RatioValue> }) {
               {formatMetric(ratio.value, ratio.unit)}
             </span>
             {ratio.change != null && ratio.change !== 0 && (
-              <span
-                className={cn(
-                  "text-xs",
-                  ratio.change > 0 ? "text-success" : "text-destructive",
-                )}
-              >
+              <span className={cn("text-xs", TONE_CLASS[changeTone(key, ratio.change)])}>
                 {formatChange(ratio.change, ratio.unit)}
               </span>
             )}

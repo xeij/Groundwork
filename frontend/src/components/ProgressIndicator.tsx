@@ -29,6 +29,7 @@ const EDGAR_CHECKLIST: ChecklistItem[] = [
   { key: "reading_financials", label: { lease: "Pulling financials", filing: "Pulling tagged XBRL financials" } },
   { key: "comparing_years", label: { lease: "Comparing years", filing: "Comparing against last year's 10-K" } },
   { key: "benchmarking", label: { lease: "Benchmarking", filing: "Ranking against industry peers" } },
+  { key: "reading_insiders", label: { lease: "Reading insider filings", filing: "Reading insider Form 4 filings" } },
   { key: "verifying", label: { lease: "Verifying quotes", filing: "Verifying every quote against the filing" } },
   { key: "finalizing", label: { lease: "Finalizing", filing: "Writing the overview" } },
 ];

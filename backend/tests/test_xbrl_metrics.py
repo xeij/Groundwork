@@ -599,6 +599,142 @@ class TestDerivedRatios:
             ),
         ]
         ratios = derived_ratios(history)
-        assert len(ratios) == 20
-        assert {entry["unit"] for entry in ratios.values()} <= {"percent", "days", "ratio", "usd", "x"}
+        assert {entry["unit"] for entry in ratios.values()} <= {
+            "percent",
+            "days",
+            "ratio",
+            "usd",
+            "x",
+            "years",
+        }
         assert all("label" in entry for entry in ratios.values())
+        # Ratios whose inputs this filer never tagged are absent rather than zeroed.
+        assert {"returnOnInvestedCapital", "effectiveTaxRate", "goodwillToAssets"}.isdisjoint(ratios)
+        # Cash runway only means something for a company that is burning cash.
+        assert "cashRunway" not in ratios
+
+
+class TestCapitalAndCashRatios:
+    """The ratios added on top of the original set, each checked against its arithmetic."""
+
+    def test_roic_taxes_operating_profit_at_the_rate_actually_paid(self):
+        # Effective rate 30/150 = 20%. NOPAT = 200 * 0.8 = 160.
+        # Invested capital = equity 700 + debt 400 - cash 100 = 1000. 160/1000 = 16%.
+        history = [
+            _year(
+                operatingIncome=200,
+                pretaxIncome=150,
+                incomeTaxExpense=30,
+                stockholdersEquity=700,
+                totalDebt=400,
+                cash=100,
+            )
+        ]
+        assert derived_ratios(history)["returnOnInvestedCapital"]["value"] == 16.0
+
+    def test_roic_is_omitted_on_a_loss_year_rather_than_taxed_at_a_made_up_rate(self):
+        history = [
+            _year(
+                operatingIncome=200,
+                pretaxIncome=-50,
+                incomeTaxExpense=10,
+                stockholdersEquity=700,
+                totalDebt=400,
+                cash=100,
+            )
+        ]
+        assert "returnOnInvestedCapital" not in derived_ratios(history)
+
+    def test_roic_clamps_a_one_off_tax_benefit_rather_than_inflating_nopat(self):
+        # A negative effective rate would otherwise make NOPAT exceed operating profit.
+        history = [
+            _year(
+                operatingIncome=200,
+                pretaxIncome=150,
+                incomeTaxExpense=-90,
+                stockholdersEquity=1000,
+                totalDebt=0,
+                cash=0,
+            )
+        ]
+        assert derived_ratios(history)["returnOnInvestedCapital"]["value"] == 20.0
+
+    def test_roic_is_omitted_when_invested_capital_is_negative(self):
+        history = [
+            _year(
+                operatingIncome=200,
+                pretaxIncome=150,
+                incomeTaxExpense=30,
+                stockholdersEquity=100,
+                totalDebt=0,
+                cash=500,
+            )
+        ]
+        assert "returnOnInvestedCapital" not in derived_ratios(history)
+
+    def test_effective_tax_rate_reports_a_benefit_as_a_negative_rate(self):
+        history = [_year(pretaxIncome=1000, incomeTaxExpense=-150)]
+        assert derived_ratios(history)["effectiveTaxRate"]["value"] == -15.0
+
+    def test_effective_tax_rate_is_omitted_on_a_pretax_loss(self):
+        history = [_year(pretaxIncome=-1000, incomeTaxExpense=50)]
+        assert "effectiveTaxRate" not in derived_ratios(history)
+
+    def test_asset_turnover_uses_average_assets(self):
+        # 1200 / ((1000 + 1400)/2) = 1.0x
+        history = [
+            _year(fiscalYear=2023, revenue=900, totalAssets=1000),
+            _year(fiscalYear=2024, revenue=1200, totalAssets=1400),
+        ]
+        entry = derived_ratios(history)["assetTurnover"]
+        assert entry["value"] == 1.0
+        assert entry["unit"] == "x"
+
+    def test_rule_of_forty_adds_growth_to_free_cash_flow_margin(self):
+        # Growth 1300/1000 - 1 = 30%. FCF = 250 - 100 = 150, margin 150/1300 = 11.54%.
+        history = [
+            _year(fiscalYear=2023, revenue=1000),
+            _year(fiscalYear=2024, revenue=1300, operatingCashFlow=250, capex=100),
+        ]
+        assert derived_ratios(history)["ruleOfForty"]["value"] == pytest.approx(41.54, abs=0.01)
+
+    def test_rule_of_forty_needs_a_prior_year_to_measure_growth(self):
+        history = [_year(revenue=1300, operatingCashFlow=250, capex=100)]
+        assert "ruleOfForty" not in derived_ratios(history)
+
+    def test_cash_runway_is_reported_only_when_the_company_burns_cash(self):
+        burning = [_year(cash=600, operatingCashFlow=-100, capex=100)]
+        entry = derived_ratios(burning)["cashRunway"]
+        assert entry["value"] == 3.0  # 600 / 200 a year
+        assert entry["unit"] == "years"
+
+        generating = [_year(cash=600, operatingCashFlow=300, capex=100)]
+        assert "cashRunway" not in derived_ratios(generating)
+
+    def test_shareholder_payout_adds_dividends_to_buybacks(self):
+        # (60 + 90) / (400 - 100) = 50%
+        history = [_year(dividendsPaid=60, shareRepurchases=90, operatingCashFlow=400, capex=100)]
+        assert derived_ratios(history)["shareholderPayout"]["value"] == 50.0
+
+    def test_shareholder_payout_counts_a_buyback_only_filer(self):
+        history = [_year(shareRepurchases=150, operatingCashFlow=400, capex=100)]
+        assert derived_ratios(history)["shareholderPayout"]["value"] == 50.0
+
+    def test_shareholder_payout_is_omitted_when_neither_is_tagged(self):
+        history = [_year(operatingCashFlow=400, capex=100)]
+        assert "shareholderPayout" not in derived_ratios(history)
+
+    def test_working_capital_and_net_cash_are_signed_dollar_figures(self):
+        history = [_year(currentAssets=800, currentLiabilities=1000, cash=200, totalDebt=900)]
+        ratios = derived_ratios(history)
+        assert ratios["workingCapital"]["value"] == -200.0
+        assert ratios["workingCapital"]["unit"] == "usd"
+        assert ratios["netCash"]["value"] == -700.0
+
+    def test_goodwill_share_of_assets_is_reported(self):
+        history = [_year(goodwill=400, totalAssets=1600)]
+        assert derived_ratios(history)["goodwillToAssets"]["value"] == 25.0
+
+    def test_ebitda_margin_adds_depreciation_back_to_operating_income(self):
+        history = [_year(revenue=1000, operatingIncome=150, depreciationAmortization=50)]
+        assert derived_ratios(history)["ebitdaMargin"]["value"] == 20.0

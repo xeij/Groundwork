@@ -107,6 +107,23 @@ _DURATION_CHAINS: dict[str, tuple[str, ...]] = {
         "WeightedAverageNumberOfDilutedSharesOutstandingAdjustment",
         "WeightedAverageNumberOfSharesOutstandingBasic",
     ),
+    # Pretax income is the denominator of the effective tax rate, which is the one
+    # line of the income statement a company can move without selling anything.
+    "pretaxIncome": (
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesDomestic",
+    ),
+    # Both are tagged as positive cash outflows, like capex.
+    "dividendsPaid": (
+        "PaymentsOfDividendsCommonStock",
+        "PaymentsOfDividends",
+        "PaymentsOfDividendsAndDividendEquivalentsOnCommonStockAndRestrictedStockUnits",
+    ),
+    "shareRepurchases": (
+        "PaymentsForRepurchaseOfCommonStock",
+        "PaymentsForRepurchaseOfEquity",
+    ),
 }
 
 _INSTANT_CHAINS: dict[str, tuple[str, ...]] = {
@@ -150,6 +167,15 @@ _INSTANT_CHAINS: dict[str, tuple[str, ...]] = {
     "retainedEarnings": (
         "RetainedEarningsAccumulatedDeficit",
         "RetainedEarningsAccumulatedDeficitIncludingPortionAttributableToNoncontrollingInterest",
+    ),
+    "goodwill": ("Goodwill",),
+    # Current deferred revenue only. The noncurrent slice is a different promise on a
+    # different horizon, and adding the two would make the year-over-year read on
+    # near-term bookings meaningless.
+    "deferredRevenue": (
+        "ContractWithCustomerLiabilityCurrent",
+        "DeferredRevenueCurrent",
+        "ContractWithCustomerLiability",
     ),
 }
 
@@ -206,6 +232,11 @@ FISCAL_YEAR_FIELDS: tuple[str, ...] = (
     "incomeTaxExpense",
     "dilutedShares",
     "retainedEarnings",
+    "pretaxIncome",
+    "dividendsPaid",
+    "shareRepurchases",
+    "goodwill",
+    "deferredRevenue",
 )
 
 
@@ -463,6 +494,89 @@ def _percent(numerator: float | None, denominator: float | None) -> float | None
     return None if ratio is None else ratio * 100
 
 
+def _effective_tax_rate(year: dict) -> float | None:
+    """Tax expense over pretax profit. Meaningless on a loss, so a loss returns None."""
+    return _positive_div(year["incomeTaxExpense"], year["pretaxIncome"])
+
+
+def _nopat(year: dict) -> float | None:
+    """Operating profit after tax, taxed at the rate the company actually paid.
+
+    A made-up statutory rate would quietly turn ROIC into a different company's number,
+    so a year with no usable effective rate yields no ROIC at all. The rate is clamped
+    to a sane band because a one-off tax benefit can otherwise produce a NOPAT larger
+    than the operating profit it came from.
+    """
+    if year["operatingIncome"] is None:
+        return None
+    rate = _effective_tax_rate(year)
+    if rate is None:
+        return None
+    return year["operatingIncome"] * (1 - min(max(rate, 0.0), 0.5))
+
+
+def _invested_capital(year: dict) -> float | None:
+    """Debt plus equity less cash: the capital the business actually has at work."""
+    if year["stockholdersEquity"] is None:
+        return None
+    capital = year["stockholdersEquity"] + (year["totalDebt"] or 0.0) - (year["cash"] or 0.0)
+    return capital if capital > 0 else None
+
+
+def _return_on_invested_capital(year: dict) -> float | None:
+    return _percent(_nopat(year), _invested_capital(year))
+
+
+def _rule_of_forty(year: dict, prior: dict | None) -> float | None:
+    """Growth plus free-cash-flow margin, the software-industry health rule of thumb.
+
+    A company growing 30% with a 15% FCF margin scores 45 and is doing fine; one growing
+    30% while burning 25% of revenue scores 5 and is buying its growth.
+    """
+    growth = _growth(year["revenue"], prior["revenue"] if prior else None)
+    margin = _percent(_free_cash_flow(year), year["revenue"])
+    if growth is None or margin is None:
+        return None
+    return growth + margin
+
+
+def _cash_runway_years(year: dict) -> float | None:
+    """How long the cash lasts at last year's burn. Omitted when the company is not burning."""
+    free_cash_flow = _free_cash_flow(year)
+    if free_cash_flow is None or free_cash_flow >= 0 or year["cash"] is None:
+        return None
+    return year["cash"] / -free_cash_flow
+
+
+def _shareholder_payout(year: dict) -> float | None:
+    """Dividends plus buybacks as a share of free cash flow.
+
+    Above 100% the company is returning cash it did not generate this year -- which is
+    fine from a war chest and not fine from a revolver, a distinction the cash flow
+    statement makes but the headline number does not.
+    """
+    returned = [part for part in (year["dividendsPaid"], year["shareRepurchases"]) if part is not None]
+    if not returned:
+        return None
+    return _percent(sum(returned), _free_cash_flow(year))
+
+
+def _working_capital(year: dict) -> float | None:
+    if year["currentAssets"] is None or year["currentLiabilities"] is None:
+        return None
+    return year["currentAssets"] - year["currentLiabilities"]
+
+
+def _net_cash(year: dict) -> float | None:
+    if year["cash"] is None or year["totalDebt"] is None:
+        return None
+    return year["cash"] - year["totalDebt"]
+
+
+def _asset_turnover(year: dict, prior: dict | None) -> float | None:
+    return _div(year["revenue"], _average(year["totalAssets"], prior["totalAssets"] if prior else None))
+
+
 # (key, label, unit, compute) -- compute takes the year and the year before it, so the
 # same function yields both `value` and `priorValue` by shifting one row back.
 _RATIO_SPECS: tuple[tuple[str, str, str, object], ...] = (
@@ -523,6 +637,27 @@ _RATIO_SPECS: tuple[tuple[str, str, str, object], ...] = (
         "percent",
         lambda y, p: _growth(y["dilutedShares"], p["dilutedShares"] if p else None),
     ),
+    ("ebitdaMargin", "EBITDA Margin", "percent", lambda y, p: _percent(_ebitda(y), y["revenue"])),
+    (
+        "returnOnInvestedCapital",
+        "Return on Invested Capital",
+        "percent",
+        lambda y, p: _return_on_invested_capital(y),
+    ),
+    ("assetTurnover", "Asset Turnover", "x", lambda y, p: _asset_turnover(y, p)),
+    ("effectiveTaxRate", "Effective Tax Rate", "percent", lambda y, p: _percent(y["incomeTaxExpense"], y["pretaxIncome"])),
+    ("rndIntensity", "R&D as % of Revenue", "percent", lambda y, p: _percent(y["rndExpense"], y["revenue"])),
+    ("goodwillToAssets", "Goodwill as % of Assets", "percent", lambda y, p: _percent(y["goodwill"], y["totalAssets"])),
+    ("ruleOfForty", "Rule of 40", "percent", lambda y, p: _rule_of_forty(y, p)),
+    (
+        "shareholderPayout",
+        "Dividends + Buybacks as % of Free Cash Flow",
+        "percent",
+        lambda y, p: _shareholder_payout(y),
+    ),
+    ("workingCapital", "Working Capital", "usd", lambda y, p: _working_capital(y)),
+    ("netCash", "Net Cash (Cash less Total Debt)", "usd", lambda y, p: _net_cash(y)),
+    ("cashRunway", "Cash Runway at Current Burn", "years", lambda y, p: _cash_runway_years(y)),
 )
 
 

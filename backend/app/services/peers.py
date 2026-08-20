@@ -71,6 +71,7 @@ METRIC_POLARITY: dict[str, bool] = {
     "returnOnCapitalEmployed": True,
     # Growth -- more is better.
     "revenueGrowth": True,
+    "ruleOfForty": True,
     "netIncomeGrowth": True,
     "earningsGrowth": True,
     # Liquidity and coverage -- more headroom is better.
@@ -110,7 +111,7 @@ _SEVERITY_ORDER = {"red": 0, "yellow": 1, "green": 2}
 _GREEN_PERCENTILE = 60
 _YELLOW_PERCENTILE = 30
 
-_UNIT_SUFFIX = {"percent": "%", "days": " days", "x": "x", "ratio": "", "usd": ""}
+_UNIT_SUFFIX = {"percent": "%", "days": " days", "x": "x", "ratio": "", "usd": "", "years": " years"}
 
 # Inverted company_tickers.json, CIK -> {cik, ticker, name}. Built from edgar's own
 # cached forward map so a warm Lambda container pays for that 800KB download once.

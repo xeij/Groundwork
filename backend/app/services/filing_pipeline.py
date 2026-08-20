@@ -32,6 +32,12 @@ DIFFABLE_ITEMS = ["1A"]
 PEER_LIMIT = 12
 PEER_BUDGET_SECONDS = 45.0
 
+# Form 4s are small but numerous. This branch runs alongside the category calls, which
+# take far longer, so the budget only has to keep a pathological filer from becoming
+# the critical path.
+INSIDER_BUDGET_SECONDS = 25.0
+FILING_HISTORY_WINDOW_YEARS = 3
+
 ProgressFn = Callable[[str, Optional[str]], None]
 
 _EMPTY_FINANCIALS = {
@@ -41,6 +47,8 @@ _EMPTY_FINANCIALS = {
     "flags": [],
     "peers": None,
 }
+
+_EMPTY_DIFFS = {"diffs": [], "priorSections": {}}
 
 
 class FilingPipelineError(Exception):
@@ -72,7 +80,8 @@ def _financials_branch(cik: str, sic: Optional[str], progress: ProgressFn) -> di
     history = history or []
 
     ratios = _safe("ratios", xbrl_metrics.derived_ratios, history) if history else None
-    screens = _safe("screens", forensic_screens.run_all_screens, history) if history else None
+    # The digit test is the one screen that reads raw facts rather than the history.
+    screens = _safe("screens", forensic_screens.run_all_screens, history, facts) if history else None
 
     peer_comparison = None
     if history and sic:
@@ -106,9 +115,14 @@ def _diff_branch(
     prior_filing: Optional[dict],
     current_year: Optional[int],
     progress: ProgressFn,
-) -> list[dict]:
+) -> dict:
+    """Year-over-year diffs, plus the prior year's sections for the document metrics.
+
+    The prior filing is a 4MB download; returning its parsed sections here is what keeps
+    the text metrics from fetching the same document a second time.
+    """
     if not prior_filing:
-        return []
+        return dict(_EMPTY_DIFFS)
 
     from . import section_diff
 
@@ -121,7 +135,7 @@ def _diff_branch(
         prior_filing["primaryDocument"],
     )
     if not prior_html:
-        return []
+        return dict(_EMPTY_DIFFS)
 
     _, prior_sections = extract_filing_sections(prior_html)
 
@@ -142,7 +156,16 @@ def _diff_branch(
         )
         if diff:
             diffs.append(diff)
-    return diffs
+    return {"diffs": diffs, "priorSections": prior_sections}
+
+
+def _insider_branch(cik: str, submissions: dict, progress: ProgressFn) -> Optional[dict]:
+    from . import insider_activity
+
+    progress("reading_insiders", "Reading insider Form 4 filings")
+    return insider_activity.build_insider_activity(
+        cik, submissions, budget_seconds=INSIDER_BUDGET_SECONDS
+    )
 
 
 # --- verification --------------------------------------------------------------------
@@ -225,20 +248,40 @@ def analyze_ticker(ticker: str, progress: Optional[ProgressFn] = None) -> dict:
     }
 
     progress("analyzing", "Reading the filing section by section")
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        # Both enrichment branches go through _safe so a failure in either one degrades
-        # the analysis rather than losing the category findings that already succeeded.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        # Every enrichment branch goes through _safe so a failure in one degrades the
+        # analysis rather than losing the category findings that already succeeded.
         financials_future = pool.submit(
             _safe, "financials", _financials_branch, cik, profile["sic"], progress
         )
         diff_future = pool.submit(
             _safe, "diffs", _diff_branch, cik, sections, prior, current["fiscalYear"], progress
         )
+        insider_future = pool.submit(_safe, "insiders", _insider_branch, cik, submissions, progress)
         categories_future = pool.submit(filing_analysis.analyze_categories, sections)
 
         categories = categories_future.result()
-        diffs = diff_future.result() or []
+        diff_result = diff_future.result() or _EMPTY_DIFFS
         financials = financials_future.result() or _EMPTY_FINANCIALS
+        insiders = insider_future.result()
+
+    diffs = diff_result["diffs"]
+
+    # Both of these are pure computation over data already in hand -- the submissions
+    # index and the two years of extracted sections -- so neither costs a request.
+    filing_track_record = _safe(
+        "filing history",
+        _filing_track_record,
+        submissions,
+    )
+    document_metrics = _safe(
+        "text metrics",
+        _text_metrics,
+        sections,
+        diff_result["priorSections"],
+        current["fiscalYear"],
+        (prior or {}).get("fiscalYear"),
+    )
 
     progress("verifying", "Checking every quote against the filing text")
     verification_stats = _safe("verification", _apply_verification, categories, sections, full_text)
@@ -268,9 +311,31 @@ def analyze_ticker(ticker: str, progress: Optional[ProgressFn] = None) -> dict:
         "flags": financials["flags"],
         "diffs": diffs,
         "peers": financials["peers"],
+        "filingTrackRecord": filing_track_record,
+        "insiderActivity": insiders,
+        "textMetrics": document_metrics,
         "verificationStats": verification_stats,
         "coverageNote": _coverage_note(sections, full_text, prior),
     }
+
+
+def _filing_track_record(submissions: dict) -> Optional[dict]:
+    from . import filing_history
+
+    return filing_history.build_filing_history(
+        submissions, window_years=FILING_HISTORY_WINDOW_YEARS
+    )
+
+
+def _text_metrics(
+    sections: dict[str, str],
+    prior_sections: dict[str, str],
+    current_year: Optional[int],
+    prior_year: Optional[int],
+) -> Optional[dict]:
+    from . import text_metrics
+
+    return text_metrics.build_text_metrics(sections, prior_sections, current_year, prior_year)
 
 
 def _fallback_intro(company_profile: dict) -> str:

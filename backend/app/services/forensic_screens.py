@@ -10,6 +10,8 @@ None of these are verdicts. They are the screens auditors and short sellers star
 and their false-positive rates are high on fast-growing and capital-intensive filers.
 """
 
+import math
+
 _MANIPULATION_THRESHOLD = -1.78  # Beneish: above this, the profile resembles manipulators
 _BENEISH_WATCH_THRESHOLD = -2.22
 
@@ -18,6 +20,24 @@ _ALTMAN_DISTRESS = 1.23
 
 _ACCRUAL_HIGH = 0.10
 _ACCRUAL_ELEVATED = 0.05
+
+# Zmijewski scores above zero imply a modelled probability of distress above 50%.
+_ZMIJEWSKI_DISTRESS = 0.0
+_ZMIJEWSKI_WATCH = -1.5
+
+# Montier's C-score counts six aggressive-accounting traits out of six.
+_C_SCORE_HIGH = 4
+_C_SCORE_ELEVATED = 2
+_C_SCORE_ASSET_GROWTH = 10.0
+
+# Nigrini's published mean-absolute-deviation bands for a first-digit test.
+_BENFORD_ACCEPTABLE_MAD = 0.012
+_BENFORD_MARGINAL_MAD = 0.015
+# Below this many distinct figures the digit distribution is noise, not a test.
+_BENFORD_MIN_SAMPLE = 300
+_BENFORD_MIN_VALUE = 100.0
+# Benford's law: the share of naturally occurring figures whose first digit is d.
+_BENFORD_EXPECTED = {digit: math.log10(1 + 1 / digit) for digit in range(1, 10)}
 
 _BENEISH_FIELDS = (
     "revenue",
@@ -57,6 +77,28 @@ _PIOTROSKI_FIELDS = (
 )
 
 _ACCRUAL_FIELDS = ("netIncome", "operatingCashFlow", "investingCashFlow", "totalAssets")
+
+_ZMIJEWSKI_FIELDS = (
+    "netIncome",
+    "totalAssets",
+    "totalLiabilities",
+    "currentAssets",
+    "currentLiabilities",
+)
+
+_C_SCORE_FIELDS = (
+    "netIncome",
+    "operatingCashFlow",
+    "revenue",
+    "receivables",
+    "inventory",
+    "costOfRevenue",
+    "currentAssets",
+    "cash",
+    "totalAssets",
+    "ppeNet",
+    "depreciationAmortization",
+)
 
 
 def beneish_m_score(history: list[dict]) -> dict | None:
@@ -320,6 +362,258 @@ def accrual_ratio(history: list[dict]) -> dict | None:
     }
 
 
+def zmijewski_score(history: list[dict]) -> dict | None:
+    """Zmijewski's three-variable probit model of financial distress.
+
+    Where Altman's Z' asks whether the balance sheet has a cushion, this asks a narrower
+    question -- is the company profitable, levered and liquid -- and converts the answer
+    into a modelled probability. It needs no market data and no prior year, so it is the
+    distress screen most likely to be available at all.
+
+    The liquidity coefficient is tiny (-0.004) and was statistically insignificant in
+    the original 1984 estimation; it is kept because it is part of the published model,
+    but it moves the score by almost nothing.
+    """
+    latest = history[-1] if history else None
+    if latest is None or not _has(latest, _ZMIJEWSKI_FIELDS):
+        return None
+
+    roa = _div(latest["netIncome"], latest["totalAssets"])
+    leverage = _div(latest["totalLiabilities"], latest["totalAssets"])
+    liquidity = _div(latest["currentAssets"], latest["currentLiabilities"])
+    if any(value is None for value in (roa, leverage, liquidity)):
+        return None
+
+    score = -4.336 - 4.513 * roa + 5.679 * leverage - 0.004 * liquidity
+    probability = 1 / (1 + math.exp(-score)) if -700 < score < 700 else float(score > 0)
+
+    if score > _ZMIJEWSKI_DISTRESS:
+        severity = "red"
+        interpretation = (
+            f"The model puts the probability of financial distress at {probability * 100:.0f}%, "
+            "above the 50% line where it classifies a company as distressed. That is driven "
+            "by some combination of losses, liabilities that are large against assets, and "
+            "thin current-asset cover."
+        )
+    elif score > _ZMIJEWSKI_WATCH:
+        severity = "yellow"
+        interpretation = (
+            f"The modelled probability of distress is {probability * 100:.0f}%. Below the "
+            "classification line, but not comfortably so: profitability or leverage is "
+            "doing most of the work holding it there."
+        )
+    else:
+        severity = "green"
+        interpretation = (
+            f"The modelled probability of distress is {probability * 100:.0f}%. Profitability "
+            "and the liability load both sit where the model expects for a company that "
+            "keeps operating normally."
+        )
+
+    return {
+        "key": "zmijewski",
+        "label": "Zmijewski Distress Score",
+        "value": round(score, 2),
+        "severity": severity,
+        "interpretation": interpretation,
+        "components": {
+            "returnOnAssets": round(roa, 4),
+            "liabilitiesToAssets": round(leverage, 4),
+            "currentRatio": round(liquidity, 4),
+            "probabilityOfDistress": round(probability, 4),
+        },
+        "basis": f"FY{latest['fiscalYear']}",
+    }
+
+
+def montier_c_score(history: list[dict]) -> dict | None:
+    """Montier's C-score: six traits shared by companies that were cooking the books.
+
+    Unlike Beneish this is not a regression -- each trait is a yes/no question, and the
+    score is how many fired. Two substitutions are forced by what XBRL carries: "other
+    current assets" is backed out of current assets less cash, receivables and inventory,
+    and the depreciation trait is measured against net PP&E because gross PP&E is
+    tagged too inconsistently to rely on. Both are noted in the components.
+    """
+    latest, prior = _consecutive_years(history)
+    if latest is None or not _has(latest, _C_SCORE_FIELDS) or not _has(prior, _C_SCORE_FIELDS):
+        return None
+
+    traits = {
+        "earningsOutrunningCash": _greater(
+            latest["netIncome"] - latest["operatingCashFlow"],
+            prior["netIncome"] - prior["operatingCashFlow"],
+        ),
+        "risingDaysSalesOutstanding": _greater(
+            _days_sales_outstanding(latest), _days_sales_outstanding(prior)
+        ),
+        "risingDaysInventory": _greater(_days_inventory(latest), _days_inventory(prior)),
+        "risingOtherCurrentAssets": _greater(
+            _percent(_other_current_assets(latest), latest["revenue"]),
+            _percent(_other_current_assets(prior), prior["revenue"]),
+        ),
+        "fallingDepreciationRate": _greater(
+            _depreciation_rate(prior), _depreciation_rate(latest)
+        ),
+        "assetsGrowingFast": _asset_growth_exceeds(latest, prior, _C_SCORE_ASSET_GROWTH),
+    }
+    if any(value is None for value in traits.values()):
+        return None
+
+    score = sum(1 for fired in traits.values() if fired)
+
+    if score >= _C_SCORE_HIGH:
+        severity = "red"
+        verdict = (
+            "Most of the pattern is present at once. Each trait alone has an innocent "
+            "explanation; together they are the profile Montier built the score to catch."
+        )
+    elif score >= _C_SCORE_ELEVATED:
+        severity = "yellow"
+        verdict = (
+            "A few of the traits are present. That is common in a growth year and is a "
+            "prompt to check the working-capital note rather than a conclusion."
+        )
+    else:
+        severity = "green"
+        verdict = "Almost none of the pattern is present."
+
+    return {
+        "key": "montier_c",
+        "label": "Montier C-Score",
+        "value": float(score),
+        "severity": severity,
+        "interpretation": (
+            f"{score} of 6 aggressive-accounting traits are present: growing distance "
+            "between profit and cash, slower collection, slower inventory turns, a rising "
+            "bucket of other current assets, a falling depreciation rate, and fast asset "
+            f"growth. {verdict}"
+        ),
+        "components": {name: (1.0 if fired else 0.0) for name, fired in traits.items()},
+        "basis": _basis(prior, latest),
+    }
+
+
+def benford_digit_test(company_facts: dict | None) -> dict | None:
+    """A first-digit test over every dollar figure the company has ever tagged.
+
+    Naturally occurring financial figures start with 1 about 30% of the time and with 9
+    about 4.6% of the time. Numbers that have been adjusted by hand tend not to, which
+    is why this test is standard in forensic accounting -- and why it is reported here
+    as at most a yellow: a filer with few distinct figures, heavy rounding, or a lot of
+    bounded quantities can fail it while doing nothing wrong. It is evidence that a
+    distribution looks unusual, never evidence of manipulation.
+
+    Values are deduplicated on (concept, period, value) first, because the same figure
+    is restated in every subsequent filing and would otherwise be counted many times.
+    """
+    values = _tagged_dollar_values(company_facts)
+    if len(values) < _BENFORD_MIN_SAMPLE:
+        return None
+
+    counts = {digit: 0 for digit in range(1, 10)}
+    for value in values:
+        counts[_leading_digit(value)] += 1
+
+    total = len(values)
+    observed = {digit: counts[digit] / total for digit in counts}
+    deviation = sum(abs(observed[d] - _BENFORD_EXPECTED[d]) for d in counts) / 9
+
+    if deviation > _BENFORD_MARGINAL_MAD:
+        severity = "yellow"
+        interpretation = (
+            f"Across {total:,} distinct tagged figures, the spread of leading digits sits "
+            "outside the range Nigrini calls conforming. Rounded reporting, a small number "
+            "of repeated figures and heavily bounded quantities all produce this without "
+            "any manipulation, so treat it as a reason to look at the numbers rather than "
+            "as a finding about them."
+        )
+    elif deviation > _BENFORD_ACCEPTABLE_MAD:
+        severity = "green"
+        interpretation = (
+            f"Across {total:,} distinct tagged figures, the leading-digit spread is "
+            "marginal against Nigrini's bands -- within the range ordinary rounding "
+            "produces."
+        )
+    else:
+        severity = "green"
+        interpretation = (
+            f"Across {total:,} distinct tagged figures, the leading digits follow the "
+            "distribution naturally occurring financial data follows."
+        )
+
+    components = {f"digit{digit}Percent": round(observed[digit] * 100, 2) for digit in counts}
+    components["sampleSize"] = float(total)
+    components["meanAbsoluteDeviation"] = round(deviation, 5)
+
+    return {
+        "key": "benford",
+        "label": "Benford First-Digit Test",
+        "value": round(deviation * 100, 2),
+        "severity": severity,
+        "interpretation": interpretation,
+        "components": components,
+        "basis": "every USD figure in the company's XBRL history",
+    }
+
+
+def _tagged_dollar_values(company_facts: dict | None) -> list[float]:
+    """Distinct USD-denominated facts, large enough for a first digit to mean anything."""
+    if not isinstance(company_facts, dict):
+        return []
+    gaap = (company_facts.get("facts") or {}).get("us-gaap")
+    if not isinstance(gaap, dict):
+        return []
+
+    seen: set[tuple] = set()
+    values: list[float] = []
+    for concept, detail in gaap.items():
+        facts = (detail.get("units") or {}).get("USD") if isinstance(detail, dict) else None
+        if not isinstance(facts, list):
+            continue
+        for fact in facts:
+            value = fact.get("val")
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                continue
+            magnitude = abs(float(value))
+            if magnitude < _BENFORD_MIN_VALUE:
+                continue
+            key = (concept, fact.get("start"), fact.get("end"), value)
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(magnitude)
+    return values
+
+
+def _leading_digit(value: float) -> int:
+    text = f"{value:.10f}".replace(".", "").lstrip("0")
+    return int(text[0]) if text else 1
+
+
+def _days_inventory(year: dict) -> float | None:
+    ratio = _percent(year.get("inventory"), year.get("costOfRevenue"))
+    return None if ratio is None else ratio / 100 * 365.0
+
+
+def _other_current_assets(year: dict) -> float | None:
+    """Current assets less the three lines that are individually tagged.
+
+    The residual is where prepayments and deferred charges sit -- the bucket that grows
+    when costs are being parked on the balance sheet instead of expensed.
+    """
+    if year.get("currentAssets") is None:
+        return None
+    known = sum(year.get(field) or 0.0 for field in ("cash", "receivables", "inventory"))
+    residual = year["currentAssets"] - known
+    return residual if residual >= 0 else None
+
+
+def _asset_growth_exceeds(latest: dict, prior: dict, threshold: float) -> bool | None:
+    growth = _growth(latest.get("totalAssets"), prior.get("totalAssets"))
+    return None if growth is None else growth > threshold
+
+
 def divergence_flags(history: list[dict]) -> list[dict]:
     """Year-over-year relationships that should track each other and stopped doing so."""
     latest, prior = _consecutive_years(history)
@@ -335,14 +629,22 @@ def divergence_flags(history: list[dict]) -> list[dict]:
     return flags
 
 
-def run_all_screens(history: list[dict]) -> dict:
+def run_all_screens(history: list[dict], company_facts: dict | None = None) -> dict:
+    """Every screen that has the inputs it needs.
+
+    `company_facts` is optional because only the digit test reads the raw fact blob;
+    everything else works off the normalized history.
+    """
     screens = [
         screen
         for screen in (
             beneish_m_score(history),
             altman_z_score(history),
+            zmijewski_score(history),
             piotroski_f_score(history),
+            montier_c_score(history),
             accrual_ratio(history),
+            benford_digit_test(company_facts),
         )
         if screen is not None
     ]
@@ -538,6 +840,76 @@ def _debt_outpacing_ebitda(latest: dict, prior: dict) -> dict | None:
     }
 
 
+def _deferred_revenue_divergence(latest: dict, prior: dict) -> dict | None:
+    """Revenue up, the pile of money customers have prepaid down.
+
+    Deferred revenue is work already paid for and not yet delivered, so it leads the
+    income statement. Recognised revenue rising while it falls means this year's growth
+    is being drawn from a balance that is not being refilled.
+    """
+    revenue_growth = _growth(latest.get("revenue"), prior.get("revenue"))
+    deferred_growth = _growth(latest.get("deferredRevenue"), prior.get("deferredRevenue"))
+    if revenue_growth is None or deferred_growth is None:
+        return None
+    if revenue_growth < 5 or deferred_growth > -5:
+        return None
+
+    return {
+        "key": "deferred_revenue_shrinking",
+        "label": "Prepaid Customer Balances Falling While Sales Rise",
+        "severity": "red" if deferred_growth <= -15 else "yellow",
+        "interpretation": (
+            f"Reported revenue grew {revenue_growth:.1f}% while deferred revenue -- money "
+            f"customers have already paid for undelivered work -- fell {abs(deferred_growth):.1f}%. "
+            "That balance normally leads sales, so this pattern means growth is being "
+            "recognised out of a backlog that is not being replaced at the same rate."
+        ),
+        "detail": {
+            "revenueGrowthPercent": round(revenue_growth, 2),
+            "deferredRevenueGrowthPercent": round(deferred_growth, 2),
+            "deferredRevenue": float(latest["deferredRevenue"]),
+        },
+    }
+
+
+def _tax_rate_collapse(latest: dict, prior: dict) -> dict | None:
+    """Profit helped along by the tax line rather than by the business."""
+    rate = _percent(latest.get("incomeTaxExpense"), latest.get("pretaxIncome"))
+    prior_rate = _percent(prior.get("incomeTaxExpense"), prior.get("pretaxIncome"))
+    if rate is None or prior_rate is None:
+        return None
+
+    drop = prior_rate - rate
+    if drop < 10:
+        return None
+
+    saving = latest["pretaxIncome"] * drop / 100
+    share_of_profit = _percent(saving, latest.get("netIncome"))
+    share = (
+        f" That is worth about {saving:,.0f} of profit, {share_of_profit:.0f}% of the year's "
+        "net income."
+        if share_of_profit is not None
+        else ""
+    )
+    return {
+        "key": "tax_rate_collapse",
+        "label": "Effective Tax Rate Dropped Sharply",
+        "severity": "red" if drop >= 20 else "yellow",
+        "interpretation": (
+            f"The effective tax rate fell from {prior_rate:.1f}% to {rate:.1f}%.{share} Tax "
+            "rates move for durable reasons and for one-off ones -- a settled dispute, a "
+            "valuation-allowance release, a repatriation -- and only the durable kind "
+            "repeats next year. The rate reconciliation in the tax note says which this is."
+        ),
+        "detail": {
+            "effectiveTaxRatePercent": round(rate, 2),
+            "priorEffectiveTaxRatePercent": round(prior_rate, 2),
+            "dropPercentagePoints": round(drop, 2),
+            "profitEffect": round(saving, 2),
+        },
+    }
+
+
 _DIVERGENCE_CHECKS = (
     _receivables_divergence,
     _inventory_divergence,
@@ -546,6 +918,8 @@ _DIVERGENCE_CHECKS = (
     _margin_compression,
     _rising_days_sales_outstanding,
     _debt_outpacing_ebitda,
+    _deferred_revenue_divergence,
+    _tax_rate_collapse,
 )
 
 

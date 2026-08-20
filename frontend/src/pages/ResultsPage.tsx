@@ -9,6 +9,9 @@ import { CompanyHeader } from "../components/CompanyHeader";
 import { FinancialsCard } from "../components/FinancialsCard";
 import { ForensicScreensCard } from "../components/ForensicScreensCard";
 import { PeerComparisonCard } from "../components/PeerComparisonCard";
+import { FilingTrackRecordCard } from "../components/FilingTrackRecordCard";
+import { InsiderActivityCard } from "../components/InsiderActivityCard";
+import { DocumentMetricsCard } from "../components/DocumentMetricsCard";
 import { SectionDiffCard } from "../components/SectionDiffCard";
 import { VerificationSummary } from "../components/VerificationBadge";
 import { StockChart } from "../components/StockChart";
@@ -61,6 +64,24 @@ function FilingResults({ summary }: { summary: FinancialSummary }) {
       {summary.peers && (
         <div className="mb-8">
           <PeerComparisonCard peers={summary.peers} />
+        </div>
+      )}
+
+      {summary.insiderActivity && (
+        <div className="mb-8">
+          <InsiderActivityCard activity={summary.insiderActivity} />
+        </div>
+      )}
+
+      {summary.filingTrackRecord && (
+        <div className="mb-8">
+          <FilingTrackRecordCard record={summary.filingTrackRecord} />
+        </div>
+      )}
+
+      {summary.textMetrics && (
+        <div className="mb-8">
+          <DocumentMetricsCard metrics={summary.textMetrics} />
         </div>
       )}
 

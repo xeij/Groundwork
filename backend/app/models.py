@@ -233,7 +233,7 @@ class RatioValue(BaseModel):
     value: float
     priorValue: Optional[float] = None
     change: Optional[float] = None
-    unit: Literal["percent", "days", "ratio", "usd", "x"] = "ratio"
+    unit: Literal["percent", "days", "ratio", "usd", "x", "years"] = "ratio"
 
 
 class ForensicScreen(BaseModel):
@@ -265,7 +265,7 @@ class PeerValue(BaseModel):
 class PeerMetric(BaseModel):
     key: str
     label: str
-    unit: Literal["percent", "days", "ratio", "usd", "x"] = "ratio"
+    unit: Literal["percent", "days", "ratio", "usd", "x", "years"] = "ratio"
     subjectValue: float
     percentile: int
     rank: int
@@ -292,6 +292,211 @@ class PeerComparison(BaseModel):
     peers: list[PeerRef] = []
     metrics: list[PeerMetric] = []
     unavailableReason: Optional[str] = None
+
+
+
+
+# --- Filing track record -------------------------------------------------------------
+
+
+class FilingEventOccurrence(BaseModel):
+    date: str
+    form: str
+    url: Optional[str] = None
+
+
+class FilingEvent(BaseModel):
+    key: str
+    label: str
+    severity: Literal["red", "yellow", "green"] = "yellow"
+    count: int = 1
+    interpretation: str
+    # Capped for payload size; `count` is the real total.
+    occurrences: list[FilingEventOccurrence] = []
+
+
+class FilingLagYear(BaseModel):
+    periodEnd: str
+    filingDate: str
+    days: int
+
+
+class FilingLag(BaseModel):
+    days: int
+    periodEnd: str
+    filingDate: str
+    typicalDays: Optional[float] = None
+    driftDays: Optional[float] = None
+    deadlineDays: Optional[int] = None
+    severity: Literal["red", "yellow", "green"] = "green"
+    interpretation: str
+    trend: list[FilingLagYear] = []
+
+
+class FilingCadence(BaseModel):
+    eightKLast12Months: int = 0
+    eightKPrior12Months: int = 0
+    amendments: int = 0
+
+
+class FilingIndexCoverage(BaseModel):
+    """How far back EDGAR's recent-filing index actually reached.
+
+    A truncated record must never be presented as a clean one, so the window that was
+    genuinely searched travels with the findings.
+    """
+
+    earliestFilingDate: Optional[str] = None
+    complete: bool = True
+    note: Optional[str] = None
+
+
+class FilingTrackRecord(BaseModel):
+    windowYears: int = 3
+    windowStart: Optional[str] = None
+    coverage: FilingIndexCoverage = FilingIndexCoverage()
+    filerCategory: Optional[str] = None
+    events: list[FilingEvent] = []
+    filingLag: Optional[FilingLag] = None
+    cadence: FilingCadence = FilingCadence()
+
+
+# --- Insider activity ----------------------------------------------------------------
+
+
+class InsiderSignal(BaseModel):
+    key: str
+    label: str
+    severity: Literal["red", "yellow", "green"] = "yellow"
+    interpretation: str
+    detail: dict[str, Optional[float]] = {}
+
+
+class InsiderWindowSummary(BaseModel):
+    buyShares: float = 0
+    buyValue: float = 0
+    buyTransactions: int = 0
+    buyers: int = 0
+    # False when a transaction reported no price, which makes the dollar total a floor.
+    buyValueComplete: bool = True
+    sellShares: float = 0
+    sellValue: float = 0
+    sellTransactions: int = 0
+    sellers: int = 0
+    sellValueComplete: bool = True
+    netShares: float = 0
+    netValue: float = 0
+    # Compensation mechanics, reported apart from the open-market figures above.
+    grantedShares: float = 0
+    taxWithheldShares: float = 0
+    plannedSaleValue: float = 0
+
+
+class InsiderRecord(BaseModel):
+    name: str
+    title: Optional[str] = None
+    role: str = "insider"
+    buyShares: float = 0
+    buyValue: float = 0
+    sellShares: float = 0
+    sellValue: float = 0
+    sharesOwnedAfter: Optional[float] = None
+    plannedSales: int = 0
+    openMarketSales: int = 0
+    lastTransactionDate: Optional[str] = None
+
+
+class InsiderCoverage(BaseModel):
+    formsFound: int = 0
+    formsRead: int = 0
+    complete: bool = True
+    note: Optional[str] = None
+
+
+class InsiderActivity(BaseModel):
+    windowMonths: int = 12
+    windowStart: Optional[str] = None
+    asOf: Optional[str] = None
+    summary: InsiderWindowSummary = InsiderWindowSummary()
+    priorSummary: Optional[InsiderWindowSummary] = None
+    signals: list[InsiderSignal] = []
+    insiders: list[InsiderRecord] = []
+    coverage: InsiderCoverage = InsiderCoverage()
+
+
+# --- Document measurements -----------------------------------------------------------
+
+
+class SectionSize(BaseModel):
+    item: str
+    label: str
+    words: int = 0
+    priorWords: Optional[int] = None
+    changePercent: Optional[float] = None
+    notable: bool = False
+
+
+class RiskFactorCounts(BaseModel):
+    count: int = 0
+    priorCount: Optional[int] = None
+    change: Optional[int] = None
+    words: int = 0
+    priorWords: Optional[int] = None
+    wordChangePercent: Optional[float] = None
+
+
+class Readability(BaseModel):
+    fogIndex: float
+    wordsPerSentence: float
+    complexWordPercent: float
+    wordCount: int = 0
+    sentenceCount: int = 0
+    severity: Literal["red", "yellow", "green"] = "green"
+    interpretation: str
+
+
+class HedgingTerm(BaseModel):
+    term: str
+    count: int
+
+
+class Hedging(BaseModel):
+    per1000: float
+    priorPer1000: Optional[float] = None
+    change: Optional[float] = None
+    wordCount: int = 0
+    topTerms: list[HedgingTerm] = []
+    severity: Literal["red", "yellow", "green"] = "green"
+    interpretation: str
+
+
+class TripwireOccurrence(BaseModel):
+    section: str
+    quote: str
+    hypothetical: bool = False
+
+
+class Tripwire(BaseModel):
+    key: str
+    label: str
+    severity: Literal["red", "yellow", "green"] = "yellow"
+    count: int = 0
+    # Conditional mentions of the same phrase, counted apart: "if we were ever to
+    # identify a material weakness" is boilerplate, not a disclosure that one exists.
+    hypotheticalCount: int = 0
+    explanation: str
+    occurrences: list[TripwireOccurrence] = []
+
+
+class TextMetrics(BaseModel):
+    currentYear: Optional[int] = None
+    priorYear: Optional[int] = None
+    sections: list[SectionSize] = []
+    riskFactors: Optional[RiskFactorCounts] = None
+    readability: Optional[Readability] = None
+    hedging: Optional[Hedging] = None
+    tripwires: list[Tripwire] = []
+
 
 
 # --- The full filing analysis --------------------------------------------------------
@@ -324,6 +529,9 @@ class FilingAnalysis(BaseModel):
     flags: list[DivergenceFlag] = []
     diffs: list[SectionDiff] = []
     peers: Optional[PeerComparison] = None
+    filingTrackRecord: Optional[FilingTrackRecord] = None
+    insiderActivity: Optional[InsiderActivity] = None
+    textMetrics: Optional[TextMetrics] = None
     verificationStats: Optional[VerificationStats] = None
     coverageNote: Optional[str] = None
 

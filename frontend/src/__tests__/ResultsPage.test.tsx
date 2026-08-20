@@ -247,6 +247,58 @@ const ENRICHED_RECORD: FilingSummaryRecord = {
       ],
       unavailableReason: null,
     },
+    insiderActivity: {
+      windowMonths: 12,
+      windowStart: "2025-08-20",
+      asOf: "2026-08-20",
+      summary: {
+        buyShares: 0, buyValue: 0, buyTransactions: 0, buyers: 0, buyValueComplete: true,
+        sellShares: 511_000, sellValue: 86_563_400, sellTransactions: 4, sellers: 2,
+        sellValueComplete: true, netShares: -511_000, netValue: -86_563_400,
+        grantedShares: 120_000, taxWithheldShares: 48_000, plannedSaleValue: 80_000_000,
+      },
+      priorSummary: null,
+      signals: [
+        {
+          key: "heavy_insider_selling",
+          label: "Insiders sold a large share of what they held",
+          severity: "yellow",
+          interpretation: "2 insiders sold 511k shares, 24% of the stock they held.",
+          detail: { percentOfHoldingsSold: 24 },
+        },
+      ],
+      insiders: [],
+      coverage: { formsFound: 14, formsRead: 14, complete: true, note: null },
+    },
+    filingTrackRecord: {
+      windowYears: 3,
+      windowStart: "2023-08-20",
+      filerCategory: "Large accelerated filer",
+      coverage: { earliestFilingDate: "2022-01-04", complete: true, note: null },
+      cadence: { eightKLast12Months: 9, eightKPrior12Months: 4, amendments: 0 },
+      events: [
+        {
+          key: "auditor_change",
+          label: "Changed auditors",
+          severity: "yellow",
+          count: 1,
+          interpretation: "Filed once, on 2025-06-02.",
+          occurrences: [{ date: "2025-06-02", form: "8-K", url: null }],
+        },
+      ],
+      filingLag: null,
+    },
+    textMetrics: {
+      currentYear: 2025,
+      priorYear: 2024,
+      sections: [
+        { item: "1A", label: "Item 1A. Risk Factors", words: 22_400, priorWords: 18_100, changePercent: 23.8, notable: true },
+      ],
+      riskFactors: { count: 41, priorCount: 35, change: 6, words: 22_400, priorWords: 18_100, wordChangePercent: 23.8 },
+      readability: null,
+      hedging: null,
+      tripwires: [],
+    },
     verificationStats: { verified: 5, paraphrased: 1, unverified: 2, rejected: 1 },
     coverageNote: "Analyzed 17 sections covering 96% of the filing text.",
   },
@@ -269,6 +321,9 @@ test("an EDGAR-sourced filing renders every enrichment", async () => {
   expect(screen.getByText(/earnings-quality screens/i)).toBeInTheDocument();
   expect(screen.getByText(/divergences worth a look/i)).toBeInTheDocument();
   expect(screen.getByText(/how it ranks against its industry/i)).toBeInTheDocument();
+  expect(screen.getByText(/what insiders did with their own shares/i)).toBeInTheDocument();
+  expect(screen.getByText(/how this company files/i)).toBeInTheDocument();
+  expect(screen.getByText(/the document itself/i)).toBeInTheDocument();
   expect(screen.getByText(/of 9 findings quote the filing word for word/i)).toBeInTheDocument();
   expect(screen.getByText(/96% of the filing text/i)).toBeInTheDocument();
 });
@@ -283,5 +338,8 @@ test("a filing without enrichments renders its categories and omits the rest", a
   expect(screen.queryByText(/what changed/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/reported financials/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/how it ranks against its industry/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/what insiders did with their own shares/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/how this company files/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/the document itself/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/how this was checked/i)).not.toBeInTheDocument();
 });

@@ -224,6 +224,30 @@ def fetch_filing_document(cik: str, accession_number: str, primary_document: str
     return _get(url).text
 
 
+def ownership_document_url(cik: str, accession_number: str, primary_document: str) -> str:
+    """The machine-readable XML behind a Section 16 ownership form (3, 4, 5).
+
+    EDGAR lists these filings with a primary document that points at the *rendered*
+    view -- "xslF345X03/wf-form4_1234.xml" -- which is an HTML table generated from the
+    XML by a stylesheet. The same filename without the stylesheet directory is the
+    source XML, which is what anything parsing transactions wants. Older filings list
+    the XML directly, so the prefix is stripped only when it is there.
+    """
+    document = (primary_document or "").strip()
+    if "/" in document:
+        head, _, tail = document.rpartition("/")
+        if not head.startswith("xsl"):
+            raise EdgarError(f"Unexpected ownership document path: {primary_document}")
+        document = tail
+    if not document.lower().endswith(".xml"):
+        raise EdgarError(f"Not an XML ownership document: {primary_document}")
+    return filing_document_url(cik, accession_number, document)
+
+
+def fetch_ownership_document(cik: str, accession_number: str, primary_document: str) -> str:
+    return _get(ownership_document_url(cik, accession_number, primary_document)).text
+
+
 def search_companies(query: str, limit: int = 10) -> list[dict]:
     """Typeahead over the ticker map: exact symbol first, then prefixes, then name matches."""
     needle = (query or "").strip().upper()

@@ -150,7 +150,7 @@ export interface SectionDiff {
   droppedForUnverifiedQuoteCount?: number;
 }
 
-export type MetricUnit = "percent" | "days" | "ratio" | "usd" | "x";
+export type MetricUnit = "percent" | "days" | "ratio" | "usd" | "x" | "years";
 
 export interface RatioValue {
   label: string;
@@ -215,6 +215,192 @@ export interface PeerComparison {
   unavailableReason?: string | null;
 }
 
+export interface FilingEventOccurrence {
+  date: string;
+  form: string;
+  url?: string | null;
+}
+
+export interface FilingEvent {
+  key: string;
+  label: string;
+  severity: Severity;
+  count: number;
+  interpretation: string;
+  /** Capped for payload size — `count` is the real total. */
+  occurrences: FilingEventOccurrence[];
+}
+
+export interface FilingLagYear {
+  periodEnd: string;
+  filingDate: string;
+  days: number;
+}
+
+export interface FilingLag {
+  days: number;
+  periodEnd: string;
+  filingDate: string;
+  typicalDays?: number | null;
+  driftDays?: number | null;
+  deadlineDays?: number | null;
+  severity: Severity;
+  interpretation: string;
+  trend: FilingLagYear[];
+}
+
+export interface FilingCadence {
+  eightKLast12Months: number;
+  eightKPrior12Months: number;
+  amendments: number;
+}
+
+export interface FilingIndexCoverage {
+  earliestFilingDate?: string | null;
+  complete: boolean;
+  note?: string | null;
+}
+
+export interface FilingTrackRecord {
+  windowYears: number;
+  windowStart?: string | null;
+  coverage: FilingIndexCoverage;
+  filerCategory?: string | null;
+  events: FilingEvent[];
+  filingLag?: FilingLag | null;
+  cadence: FilingCadence;
+}
+
+export interface InsiderSignal {
+  key: string;
+  label: string;
+  severity: Severity;
+  interpretation: string;
+  detail?: Record<string, number | null>;
+}
+
+export interface InsiderWindowSummary {
+  buyShares: number;
+  buyValue: number;
+  buyTransactions: number;
+  buyers: number;
+  /** False when a trade reported no price, which makes the dollar total a floor. */
+  buyValueComplete: boolean;
+  sellShares: number;
+  sellValue: number;
+  sellTransactions: number;
+  sellers: number;
+  sellValueComplete: boolean;
+  netShares: number;
+  netValue: number;
+  /** Compensation mechanics, kept apart from the open-market figures above. */
+  grantedShares: number;
+  taxWithheldShares: number;
+  plannedSaleValue: number;
+}
+
+export interface InsiderRecord {
+  name: string;
+  title?: string | null;
+  role: string;
+  buyShares: number;
+  buyValue: number;
+  sellShares: number;
+  sellValue: number;
+  sharesOwnedAfter?: number | null;
+  plannedSales: number;
+  openMarketSales: number;
+  lastTransactionDate?: string | null;
+}
+
+export interface InsiderCoverage {
+  formsFound: number;
+  formsRead: number;
+  complete: boolean;
+  note?: string | null;
+}
+
+export interface InsiderActivity {
+  windowMonths: number;
+  windowStart?: string | null;
+  asOf?: string | null;
+  summary: InsiderWindowSummary;
+  priorSummary?: InsiderWindowSummary | null;
+  signals: InsiderSignal[];
+  insiders: InsiderRecord[];
+  coverage: InsiderCoverage;
+}
+
+export interface SectionSize {
+  item: string;
+  label: string;
+  words: number;
+  priorWords?: number | null;
+  changePercent?: number | null;
+  notable: boolean;
+}
+
+export interface RiskFactorCounts {
+  count: number;
+  priorCount?: number | null;
+  change?: number | null;
+  words: number;
+  priorWords?: number | null;
+  wordChangePercent?: number | null;
+}
+
+export interface Readability {
+  fogIndex: number;
+  wordsPerSentence: number;
+  complexWordPercent: number;
+  wordCount: number;
+  sentenceCount: number;
+  severity: Severity;
+  interpretation: string;
+}
+
+export interface HedgingTerm {
+  term: string;
+  count: number;
+}
+
+export interface Hedging {
+  per1000: number;
+  priorPer1000?: number | null;
+  change?: number | null;
+  wordCount: number;
+  topTerms: HedgingTerm[];
+  severity: Severity;
+  interpretation: string;
+}
+
+export interface TripwireOccurrence {
+  section: string;
+  quote: string;
+  hypothetical: boolean;
+}
+
+export interface Tripwire {
+  key: string;
+  label: string;
+  severity: Severity;
+  count: number;
+  /** Conditional mentions of the same phrase, counted apart from statements of fact. */
+  hypotheticalCount: number;
+  explanation: string;
+  occurrences: TripwireOccurrence[];
+}
+
+export interface TextMetrics {
+  currentYear?: number | null;
+  priorYear?: number | null;
+  sections: SectionSize[];
+  riskFactors?: RiskFactorCounts | null;
+  readability?: Readability | null;
+  hedging?: Hedging | null;
+  tripwires: Tripwire[];
+}
+
 export interface VerificationStats {
   verified: number;
   paraphrased: number;
@@ -246,6 +432,9 @@ export interface FinancialSummary {
   flags?: DivergenceFlag[];
   diffs?: SectionDiff[];
   peers?: PeerComparison | null;
+  filingTrackRecord?: FilingTrackRecord | null;
+  insiderActivity?: InsiderActivity | null;
+  textMetrics?: TextMetrics | null;
   verificationStats?: VerificationStats | null;
   coverageNote?: string | null;
 }
@@ -302,6 +491,7 @@ export type AnalysisStep =
   | "reading_financials"
   | "comparing_years"
   | "benchmarking"
+  | "reading_insiders"
   | "verifying";
 
 export class PendingError extends Error {

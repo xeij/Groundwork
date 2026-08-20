@@ -236,3 +236,36 @@ def test_unset_or_blank_user_agent_falls_back_silently(monkeypatch, caplog, valu
 def test_the_shipped_default_carries_a_contact_address():
     """The out-of-the-box default must satisfy www.sec.gov or nothing downloads."""
     assert edgar._CONTACT_RE.search(edgar._DEFAULT_USER_AGENT)
+
+
+# ------------------------------------------------------- ownership (Section 16) documents
+
+
+def test_ownership_url_strips_the_stylesheet_directory():
+    """EDGAR lists Form 4s by their rendered view; the XML sits one level up."""
+    url = edgar.ownership_document_url(
+        "0000320193", "0000320193-26-000042", "xslF345X03/wf-form4_176.xml"
+    )
+
+    assert url == (
+        "https://www.sec.gov/Archives/edgar/data/320193/000032019326000042/wf-form4_176.xml"
+    )
+
+
+def test_ownership_url_accepts_a_bare_xml_document():
+    url = edgar.ownership_document_url("0000320193", "0000320193-26-000042", "form4.xml")
+
+    assert url.endswith("/form4.xml")
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        "primary_doc.html",          # the rendered HTML, not the source
+        "somewhere/else/form4.xml",  # not a stylesheet directory
+        "",
+    ],
+)
+def test_ownership_url_rejects_documents_that_are_not_the_source_xml(document):
+    with pytest.raises(edgar.EdgarError):
+        edgar.ownership_document_url("0000320193", "0000320193-26-000042", document)
